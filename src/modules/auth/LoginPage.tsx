@@ -74,7 +74,7 @@ export const LoginPage: React.FC = () => {
           <div className="relative z-10 w-full max-w-[270px] sm:max-w-sm lg:max-w-lg mx-auto my-auto">
             <div className="relative rounded-3xl overflow-hidden shadow-xl">
               <img
-                src="/avatars/team-login.jpg"
+                src={`${import.meta.env.BASE_URL}avatars/team-login.jpg`}
                 alt="Equipo de desarrollo GFO IS2122"
                 style={{
                   objectPosition: 'center 42%',

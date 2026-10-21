@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
+import { HashRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from '../providers/AuthContext';
 import { FinancialProvider } from '../providers/FinancialContext';
 import { MainLayout } from '../layouts/MainLayout';
@@ -35,7 +35,7 @@ const RequireAuth: React.FC = () => {
 export const AppRouter: React.FC = () => {
   return (
     <AuthProvider>
-      <BrowserRouter>
+      <HashRouter>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route element={<RequireAuth />}>
@@ -55,7 +55,7 @@ export const AppRouter: React.FC = () => {
             </Route>
           </Route>
         </Routes>
-      </BrowserRouter>
+      </HashRouter>
     </AuthProvider>
   );
 };

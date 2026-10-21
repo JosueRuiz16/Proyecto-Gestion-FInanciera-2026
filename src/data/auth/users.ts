@@ -25,6 +25,8 @@ interface UserRecord extends AppUser {
   password: string;
 }
 
+const baseUrl = import.meta.env.BASE_URL;
+
 const USER_RECORDS: UserRecord[] = [
   {
     id: 'josue',
@@ -32,7 +34,7 @@ const USER_RECORDS: UserRecord[] = [
     displayName: 'Josue',
     role: 'ESTUDIANTE',
     password: 'josue123',
-    avatarUrl: '/avatars/josue.jpg',
+    avatarUrl: `${baseUrl}avatars/josue.jpg`,
     avatarPosition: '52% 60%',
   },
   {
@@ -41,7 +43,7 @@ const USER_RECORDS: UserRecord[] = [
     displayName: 'Alejandra',
     role: 'ESTUDIANTE',
     password: 'alejandra123',
-    avatarUrl: '/avatars/alejandra.jpg',
+    avatarUrl: `${baseUrl}avatars/alejandra.jpg`,
     avatarPosition: '46% 36%',
   },
   {
@@ -50,7 +52,7 @@ const USER_RECORDS: UserRecord[] = [
     displayName: 'Dulce',
     role: 'ESTUDIANTE',
     password: 'dulce123',
-    avatarUrl: '/avatars/dulce.jpg',
+    avatarUrl: `${baseUrl}avatars/dulce.jpg`,
     avatarPosition: '42% 30%',
   },
   {
@@ -59,7 +61,7 @@ const USER_RECORDS: UserRecord[] = [
     displayName: 'Itzy',
     role: 'ESTUDIANTE',
     password: 'itzy123',
-    avatarUrl: '/avatars/itzy.png',
+    avatarUrl: `${baseUrl}avatars/itzy.png`,
     avatarPosition: '64% 52%',
   },
   {
@@ -68,7 +70,7 @@ const USER_RECORDS: UserRecord[] = [
     displayName: 'Esteban',
     role: 'ESTUDIANTE',
     password: 'esteban123',
-    avatarUrl: '/avatars/esteban.png',
+    avatarUrl: `${baseUrl}avatars/esteban.png`,
     avatarPosition: '46% 28%',
   },
   { id: 'admin', username: 'admin', displayName: 'Admin', role: 'ADMIN', password: 'admin123' },
