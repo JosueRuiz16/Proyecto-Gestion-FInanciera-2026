@@ -77,7 +77,7 @@ export const LoginPage: React.FC = () => {
                 src={`${import.meta.env.BASE_URL}avatars/team-login.jpg`}
                 alt="Equipo de desarrollo GFO IS2122"
                 style={{
-                  objectPosition: 'center 42%',
+                  objectPosition: 'center 48%',
                   WebkitMaskImage:
                     'radial-gradient(ellipse 92% 90% at 50% 50%, #000 62%, rgba(0,0,0,0.45) 84%, transparent 100%)',
                   maskImage:
