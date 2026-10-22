@@ -73,18 +73,18 @@ export const MainLayout: React.FC = () => {
   const CurrentModuleIcon = currentModule.icon;
 
   return (
-    <div className="min-h-screen p-2 sm:p-3 lg:p-4 overflow-x-hidden">
-      <div className="glass-frame rounded-[1.75rem] p-2.5 sm:p-3 flex flex-col lg:flex-row gap-3 w-full min-h-[calc(100vh-2rem)]">
+    <div className="min-h-screen p-1 sm:p-3 lg:p-4 overflow-x-hidden">
+      <div className="glass-frame rounded-[1.5rem] sm:rounded-[1.75rem] p-2 sm:p-3 flex flex-col lg:flex-row gap-2 lg:gap-3 w-full min-h-[calc(100vh-0.5rem)] sm:min-h-[calc(100vh-2rem)]">
         {/* =====================================================================
             1. BARRA SUPERIOR COMPACTA PARA MÓVIL (lg:hidden)
             Evita que los iconos se desborden horizontalmente y abre el menú
             de pantalla completa con fondo translúcido.
            ===================================================================== */}
-        <div className="glass-card flex lg:hidden items-center justify-between px-3.5 py-2.5 gap-2">
+        <div className="glass-card flex lg:hidden items-center justify-between px-2.5 py-1.5 gap-2">
           <button
             type="button"
             onClick={() => setMobileMenuOpen(true)}
-            className="inline-flex items-center gap-2.5 px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-sm active:scale-95 transition-transform"
+            className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-sm active:scale-95 transition-transform"
           >
             <Menu className="w-4 h-4" />
             <span className="truncate max-w-[175px] sm:max-w-xs">
@@ -95,12 +95,12 @@ export const MainLayout: React.FC = () => {
             )}
           </button>
 
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <button
               type="button"
               aria-label={isDark ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
               onClick={() => setIsDark((d) => !d)}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-blue-600 dark:text-emerald-400 bg-white/60 dark:bg-emerald-950/60 border border-slate-200 dark:border-emerald-500/30"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-blue-600 dark:text-emerald-400 bg-white/60 dark:bg-emerald-950/60 border border-slate-200 dark:border-emerald-500/30"
             >
               {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
@@ -117,7 +117,7 @@ export const MainLayout: React.FC = () => {
                   resetDemoData();
                 }
               }}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-amber-500 bg-white/60 dark:bg-emerald-950/60 border border-slate-200 dark:border-emerald-500/30"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-amber-500 bg-white/60 dark:bg-emerald-950/60 border border-slate-200 dark:border-emerald-500/30"
             >
               <RotateCcw className="w-4 h-4" />
             </button>
@@ -126,7 +126,7 @@ export const MainLayout: React.FC = () => {
               type="button"
               aria-label="Cerrar sesión"
               onClick={logout}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-rose-500 bg-white/60 dark:bg-emerald-950/60 border border-slate-200 dark:border-emerald-500/30"
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-rose-500 bg-white/60 dark:bg-emerald-950/60 border border-slate-200 dark:border-emerald-500/30"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -136,14 +136,14 @@ export const MainLayout: React.FC = () => {
         {/* =====================================================================
             2. MENÚ MÓVIL A PANTALLA COMPLETA TRANSLÚCIDO (Estilo Overlay)
             Deja ver ligeramente el fondo desenfocado, lista centrada de módulos
-            y botón circular "X" abajo para cerrar.
+            y botón circular "X" abajo para cerrar, con márgenes reducidos.
            ===================================================================== */}
         {mobileMenuOpen && (
-          <div className="fixed inset-0 z-[100000] lg:hidden bg-slate-950/85 dark:bg-black/88 backdrop-blur-md flex flex-col justify-between p-6 text-white animate-fadeIn">
-            {/* Encabezado del overlay con foto y nombre del usuario */}
-            <div className="flex items-center justify-between border-b border-white/15 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-emerald-400/70 bg-blue-600 flex items-center justify-center font-bold">
+          <div className="fixed inset-0 z-[100000] lg:hidden bg-slate-950/85 dark:bg-black/88 backdrop-blur-md flex flex-col items-center justify-center gap-2 px-4 py-2 text-white animate-fadeIn">
+            {/* Encabezado compacto del overlay con foto y nombre del usuario */}
+            <div className="w-full max-w-xs flex items-center justify-between border-b border-white/15 pb-2">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full overflow-hidden ring-2 ring-emerald-400/70 bg-blue-600 flex items-center justify-center text-xs font-bold">
                   {user?.avatarUrl ? (
                     <img
                       src={user.avatarUrl}
@@ -156,17 +156,17 @@ export const MainLayout: React.FC = () => {
                   )}
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-white">{user?.displayName}</p>
-                  <p className="text-[11px] text-slate-300">
-                    Selecciona el módulo al que deseas ir
+                  <p className="text-xs font-bold text-white leading-tight">{user?.displayName}</p>
+                  <p className="text-[10px] text-slate-300 leading-tight">
+                    Selecciona un módulo
                   </p>
                 </div>
               </div>
-              <CurrentModuleIcon className="w-5 h-5 text-emerald-400" />
+              <CurrentModuleIcon className="w-4 h-4 text-emerald-400" />
             </div>
 
-            {/* Lista central vertical de todos los módulos (estilo imagen de referencia) */}
-            <nav className="my-auto py-4 overflow-y-auto max-h-[70vh] flex flex-col items-center gap-2">
+            {/* Lista central vertical de todos los módulos con menor margen */}
+            <nav className="w-full max-w-xs py-1 overflow-y-auto max-h-[76vh] flex flex-col items-center gap-1">
               {NAV_ITEMS.map((item) => {
                 const Icon = item.icon;
                 const showBadge =
@@ -178,13 +178,13 @@ export const MainLayout: React.FC = () => {
                     to={item.to}
                     onClick={() => setMobileMenuOpen(false)}
                     className={({ isActive }) =>
-                      `w-full max-w-xs px-4 py-2.5 rounded-2xl flex items-center justify-center gap-2.5 text-center transition-all ${isActive
-                        ? 'text-white font-extrabold text-base bg-white/15 border border-white/25 shadow-lg scale-[1.02]'
-                        : 'text-slate-300/85 hover:text-white font-medium text-sm hover:bg-white/5'
+                      `w-full px-3 py-1.5 rounded-xl flex items-center justify-center gap-2 text-center transition-all ${isActive
+                        ? 'text-white font-extrabold text-sm bg-white/15 border border-white/25 shadow-md'
+                        : 'text-slate-300/85 hover:text-white font-medium text-xs hover:bg-white/5'
                       }`
                     }
                   >
-                    <Icon className="w-4 h-4 shrink-0 opacity-85" />
+                    <Icon className="w-3.5 h-3.5 shrink-0 opacity-85" />
                     <span>{item.label}</span>
                     {showBadge && (
                       <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-rose-500 text-white">
@@ -196,17 +196,17 @@ export const MainLayout: React.FC = () => {
               })}
             </nav>
 
-            {/* Botón inferior de cierre "X" (idéntico al diseño de referencia) */}
-            <div className="pt-3 border-t border-white/15 flex flex-col items-center gap-2">
+            {/* Botón inferior de cierre "X" compacto */}
+            <div className="w-full max-w-xs pt-1.5 border-t border-white/15 flex flex-col items-center gap-0.5">
               <button
                 type="button"
                 aria-label="Cerrar menú"
                 onClick={() => setMobileMenuOpen(false)}
-                className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/25 flex items-center justify-center text-white transition-transform active:scale-90"
+                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 border border-white/25 flex items-center justify-center text-white transition-transform active:scale-90"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5" />
               </button>
-              <span className="text-[11px] text-slate-400">Cerrar menú</span>
+              <span className="text-[10px] text-slate-400">Cerrar</span>
             </div>
           </div>
         )}
@@ -303,8 +303,8 @@ export const MainLayout: React.FC = () => {
         </aside>
 
         {/* Contenedor derecho con z-index inferior (z-10) */}
-        <div className="relative z-10 flex-1 min-w-0 flex flex-col gap-4">
-          <header className="glass-card px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="relative z-10 flex-1 min-w-0 flex flex-col gap-2 sm:gap-4">
+          <header className="glass-card px-3 sm:px-5 py-2 sm:py-3 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
                 GFO • IS2122 • Sistema de Análisis y Planeación Financiera
@@ -337,8 +337,8 @@ export const MainLayout: React.FC = () => {
               </span>
               <div
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${activeTotals.estaCuadrado
-                    ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700/50'
-                    : 'bg-rose-50 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-700/50'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700/50'
+                  : 'bg-rose-50 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-700/50'
                   }`}
               >
                 {activeTotals.estaCuadrado ? (
