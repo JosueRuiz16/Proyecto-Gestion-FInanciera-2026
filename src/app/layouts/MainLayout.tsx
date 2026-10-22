@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   Activity,
   BarChart3,
@@ -12,12 +12,14 @@ import {
   Gauge,
   LayoutDashboard,
   LogOut,
+  Menu,
   Moon,
   RotateCcw,
   Scale,
   Sun,
   Wallet,
   UserCircle2,
+  X,
 } from 'lucide-react';
 import { useFinancialSystem } from '../providers/FinancialContext';
 import { useAuth } from '../providers/AuthContext';
@@ -47,23 +49,173 @@ export const MainLayout: React.FC = () => {
     resetDemoData,
   } = useFinancialSystem();
   const { user, logout } = useAuth();
+  const location = useLocation();
 
   // Tema claro/oscuro: aplica la clase 'dark' en <html> y persiste en localStorage
   const [isDark, setIsDark] = useState<boolean>(
     () => localStorage.getItem('gfo_theme') === 'dark'
   );
+  // Menú de pantalla completa en móvil
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', isDark);
     localStorage.setItem('gfo_theme', isDark ? 'dark' : 'light');
   }, [isDark]);
 
+  // Cierra automáticamente el menú móvil al cambiar de ruta
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [location.pathname]);
+
+  const currentModule =
+    NAV_ITEMS.find((item) => location.pathname.startsWith(item.to)) ?? NAV_ITEMS[0];
+  const CurrentModuleIcon = currentModule.icon;
+
   return (
-    <div className="min-h-screen p-2 sm:p-3 lg:p-4">
+    <div className="min-h-screen p-2 sm:p-3 lg:p-4 overflow-x-hidden">
       <div className="glass-frame rounded-[1.75rem] p-2.5 sm:p-3 flex flex-col lg:flex-row gap-3 w-full min-h-[calc(100vh-2rem)]">
-        {/* Barra lateral compacta de iconos con sidebar-dock (z-index superior a todo el contenido) */}
-        <aside className="glass-card sidebar-dock !rounded-3xl lg:w-[76px] shrink-0 flex lg:flex-col items-center gap-2 p-3 overflow-visible">
-          <div className="nav-icon hidden lg:flex mb-2 w-11 h-11 rounded-full bg-blue-600 text-white items-center justify-center text-base font-bold shadow-md overflow-hidden ring-2 ring-white/80 dark:ring-emerald-400/50">
+        {/* =====================================================================
+            1. BARRA SUPERIOR COMPACTA PARA MÓVIL (lg:hidden)
+            Evita que los iconos se desborden horizontalmente y abre el menú
+            de pantalla completa con fondo translúcido.
+           ===================================================================== */}
+        <div className="glass-card flex lg:hidden items-center justify-between px-3.5 py-2.5 gap-2">
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen(true)}
+            className="inline-flex items-center gap-2.5 px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold shadow-sm active:scale-95 transition-transform"
+          >
+            <Menu className="w-4 h-4" />
+            <span className="truncate max-w-[175px] sm:max-w-xs">
+              {currentModule.label}
+            </span>
+            {inventoryResult.productsInReorderAlert > 0 && (
+              <span className="w-2 h-2 rounded-full bg-rose-400" />
+            )}
+          </button>
+
+          <div className="flex items-center gap-1.5">
+            <button
+              type="button"
+              aria-label={isDark ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
+              onClick={() => setIsDark((d) => !d)}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-blue-600 dark:text-emerald-400 bg-white/60 dark:bg-emerald-950/60 border border-slate-200 dark:border-emerald-500/30"
+            >
+              {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </button>
+
+            <button
+              type="button"
+              aria-label="Restaurar caso demostrativo"
+              onClick={() => {
+                if (
+                  window.confirm(
+                    '¿Restaurar todos los datos al Caso Demostrativo original?'
+                  )
+                ) {
+                  resetDemoData();
+                }
+              }}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-amber-500 bg-white/60 dark:bg-emerald-950/60 border border-slate-200 dark:border-emerald-500/30"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+
+            <button
+              type="button"
+              aria-label="Cerrar sesión"
+              onClick={logout}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-rose-500 bg-white/60 dark:bg-emerald-950/60 border border-slate-200 dark:border-emerald-500/30"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* =====================================================================
+            2. MENÚ MÓVIL A PANTALLA COMPLETA TRANSLÚCIDO (Estilo Overlay)
+            Deja ver ligeramente el fondo desenfocado, lista centrada de módulos
+            y botón circular "X" abajo para cerrar.
+           ===================================================================== */}
+        {mobileMenuOpen && (
+          <div className="fixed inset-0 z-[100000] lg:hidden bg-slate-950/85 dark:bg-black/88 backdrop-blur-md flex flex-col justify-between p-6 text-white animate-fadeIn">
+            {/* Encabezado del overlay con foto y nombre del usuario */}
+            <div className="flex items-center justify-between border-b border-white/15 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-emerald-400/70 bg-blue-600 flex items-center justify-center font-bold">
+                  {user?.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.displayName}
+                      style={{ objectPosition: user.avatarPosition ?? 'center' }}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    user?.displayName.charAt(0).toUpperCase()
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white">{user?.displayName}</p>
+                  <p className="text-[11px] text-slate-300">
+                    Selecciona el módulo al que deseas ir
+                  </p>
+                </div>
+              </div>
+              <CurrentModuleIcon className="w-5 h-5 text-emerald-400" />
+            </div>
+
+            {/* Lista central vertical de todos los módulos (estilo imagen de referencia) */}
+            <nav className="my-auto py-4 overflow-y-auto max-h-[70vh] flex flex-col items-center gap-2">
+              {NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const showBadge =
+                  item.to === '/inventario' &&
+                  inventoryResult.productsInReorderAlert > 0;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={({ isActive }) =>
+                      `w-full max-w-xs px-4 py-2.5 rounded-2xl flex items-center justify-center gap-2.5 text-center transition-all ${isActive
+                        ? 'text-white font-extrabold text-base bg-white/15 border border-white/25 shadow-lg scale-[1.02]'
+                        : 'text-slate-300/85 hover:text-white font-medium text-sm hover:bg-white/5'
+                      }`
+                    }
+                  >
+                    <Icon className="w-4 h-4 shrink-0 opacity-85" />
+                    <span>{item.label}</span>
+                    {showBadge && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-rose-500 text-white">
+                        {inventoryResult.productsInReorderAlert}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </nav>
+
+            {/* Botón inferior de cierre "X" (idéntico al diseño de referencia) */}
+            <div className="pt-3 border-t border-white/15 flex flex-col items-center gap-2">
+              <button
+                type="button"
+                aria-label="Cerrar menú"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 border border-white/25 flex items-center justify-center text-white transition-transform active:scale-90"
+              >
+                <X className="w-6 h-6" />
+              </button>
+              <span className="text-[11px] text-slate-400">Cerrar menú</span>
+            </div>
+          </div>
+        )}
+
+        {/* =====================================================================
+            3. BARRA LATERAL DE ESCRITORIO (Solo visible en PC: hidden lg:flex)
+           ===================================================================== */}
+        <aside className="glass-card sidebar-dock !rounded-3xl hidden lg:flex lg:w-[76px] shrink-0 flex-col items-center gap-2 p-3 overflow-visible">
+          <div className="nav-icon flex mb-2 w-11 h-11 rounded-full bg-blue-600 text-white items-center justify-center text-base font-bold shadow-md overflow-hidden ring-2 ring-white/80 dark:ring-emerald-400/50">
             {user?.avatarUrl ? (
               <img
                 src={user.avatarUrl}
@@ -72,7 +224,9 @@ export const MainLayout: React.FC = () => {
                 className="w-full h-full object-cover"
               />
             ) : (
-              user?.displayName.charAt(0).toUpperCase() ?? <UserCircle2 className="w-6 h-6" />
+              user?.displayName.charAt(0).toUpperCase() ?? (
+                <UserCircle2 className="w-6 h-6" />
+              )
             )}
             <span className="nav-tip">
               {user?.displayName} {user?.role === 'ADMIN' ? '(Administrador)' : ''}
@@ -82,7 +236,8 @@ export const MainLayout: React.FC = () => {
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const showBadge =
-              item.to === '/inventario' && inventoryResult.productsInReorderAlert > 0;
+              item.to === '/inventario' &&
+              inventoryResult.productsInReorderAlert > 0;
             return (
               <NavLink
                 key={item.to}
@@ -104,8 +259,7 @@ export const MainLayout: React.FC = () => {
             );
           })}
 
-          {/* Controles inferiores: Botón de Tema (Claro / Oscuro Verde-Negro) arriba de Restaurar */}
-          <div className="lg:mt-auto flex lg:flex-col items-center gap-2 pt-2 border-t border-white/40 dark:border-emerald-500/20">
+          <div className="mt-auto flex flex-col items-center gap-2 pt-2 border-t border-white/40 dark:border-emerald-500/20">
             <button
               type="button"
               aria-label={isDark ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
@@ -148,14 +302,14 @@ export const MainLayout: React.FC = () => {
           </div>
         </aside>
 
-        {/* Contenedor derecho con z-index inferior (z-10) para que los tooltips de aside nunca queden debajo */}
+        {/* Contenedor derecho con z-index inferior (z-10) */}
         <div className="relative z-10 flex-1 min-w-0 flex flex-col gap-4">
-          <header className="glass-card px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+          <header className="glass-card px-4 sm:px-5 py-3 flex flex-wrap items-center justify-between gap-3">
             <div>
               <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600">
                 GFO • IS2122 • Sistema de Análisis y Planeación Financiera
               </span>
-              <h2 className="text-base font-bold text-slate-900 leading-tight">
+              <h2 className="text-sm sm:text-base font-bold text-slate-900 leading-tight">
                 {state.company.name}
               </h2>
               <p className="text-[11px] text-slate-500">
@@ -164,7 +318,7 @@ export const MainLayout: React.FC = () => {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200">
                 {user?.avatarUrl ? (
                   <img
@@ -183,8 +337,8 @@ export const MainLayout: React.FC = () => {
               </span>
               <div
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border ${activeTotals.estaCuadrado
-                  ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700/50'
-                  : 'bg-rose-50 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-700/50'
+                    ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700/50'
+                    : 'bg-rose-50 dark:bg-rose-950/70 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-700/50'
                   }`}
               >
                 {activeTotals.estaCuadrado ? (
