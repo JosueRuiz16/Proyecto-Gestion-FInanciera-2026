@@ -29,11 +29,11 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install dependencies (clean Linux binaries)
-        run: rm -rf node_modules && npm install
+      - name: Install dependencies
+        run: npm install
 
       - name: Build production bundle
-        run: npx tsc -b && npx vite build
+        run: npm run build
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
