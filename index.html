@@ -4,12 +4,38 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Sistema de Análisis y Planeación Financiera</title>
+  <title>Sistema de Análisis y Planeación Financiera | GFO IS2122</title>
 </head>
 
 <body class="bg-slate-50 text-slate-900 antialiased">
   <div id="root"></div>
-  <script type="module" src="/src/main.tsx"></script>
+  <script>
+    // Si estamos en localhost (npm run dev), carga /src/main.tsx.
+    // Si estamos en GitHub Pages sirviendo desde /(root), carga el bundle compilado en ./docs/
+    (function () {
+      var isLocal =
+        location.hostname === 'localhost' ||
+        location.hostname === '127.0.0.1' ||
+        location.port !== '';
+      if (isLocal) {
+        var devScript = document.createElement('script');
+        devScript.type = 'module';
+        devScript.src = '/src/main.tsx';
+        document.body.appendChild(devScript);
+      } else {
+        var link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.href = './docs/assets/index-BZYmAe6d.css';
+        document.head.appendChild(link);
+
+        var prodScript = document.createElement('script');
+        prodScript.type = 'module';
+        prodScript.crossOrigin = 'anonymous';
+        prodScript.src = './docs/assets/index-CCSatBpm.js';
+        document.head.appendChild(prodScript);
+      }
+    })();
+  </script>
 </body>
 
 </html>
