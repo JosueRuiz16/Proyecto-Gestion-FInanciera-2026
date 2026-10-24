@@ -103,7 +103,12 @@ export function computeFinancialStatements(
   const uaii = utilidadBruta - totalGastosOperativos;
   const gastosFinancieros = sumByCategory('GASTO_FINANCIERO');
   const uai = uaii - gastosFinancieros;
-  const impuestos = uai > 0 ? Number(((uai * period.taxRate) / 100).toFixed(2)) : 0;
+  const impuestos =
+    period.taxAmount !== undefined && period.taxAmount !== null
+      ? Number(Number(period.taxAmount).toFixed(2))
+      : uai > 0
+        ? Number(((uai * period.taxRate) / 100).toFixed(2))
+        : 0;
   const utilidadNeta = Number((uai - impuestos).toFixed(2));
 
   return {

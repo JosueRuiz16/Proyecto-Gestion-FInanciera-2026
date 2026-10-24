@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Boxes } from 'lucide-react';
+import { AlertTriangle, Boxes, RefreshCw } from 'lucide-react';
 import { useFinancialSystem } from '../../app/providers/FinancialContext';
 import { AcademicDefenseCard } from '../../components/common/AcademicDefenseCard';
 import { formatCurrency, formatNumber } from '../../components/common/formatters';
@@ -8,9 +8,11 @@ import { formatCurrency, formatNumber } from '../../components/common/formatters
 export const BudgetingPage: React.FC = () => {
   const {
     state,
+    activePeriod,
     masterBudgetAndProforma: mb,
     inventoryResult,
     updateMasterBudget,
+    syncMasterBudgetWithBalance,
   } = useFinancialSystem();
 
   const b = state.masterBudget;
@@ -27,16 +29,27 @@ export const BudgetingPage: React.FC = () => {
           </h1>
           <p className="text-xs text-slate-600">
             Cédulas presupuestarias integradas: Ventas, Compras, Costo de Bienes Vendidos,
-            Gastos de Operación y Flujo de Caja Proyectado.
+            Gastos de Operación y Flujo de Caja Proyectado (todos los supuestos son editables).
           </p>
         </div>
 
-        <Link
-          to="/finanzas/proforma"
-          className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition-colors"
-        >
-          Ver Estados Proforma Resultantes →
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={syncMasterBudgetWithBalance}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Sincronizar Saldos con Balance ({activePeriod.name})</span>
+          </button>
+
+          <Link
+            to="/finanzas/proforma"
+            className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition-colors"
+          >
+            Ver Estados Proforma Resultantes →
+          </Link>
+        </div>
       </div>
 
       {/* Vínculo con el módulo de Inventario (Requisito 7.2 Guía GFO 2026) */}
@@ -95,19 +108,36 @@ export const BudgetingPage: React.FC = () => {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Panel de Supuestos de Planificación */}
+        {/* Panel Completo de Supuestos de Planificación (Todos Editables) */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
-          <h2 className="text-sm font-bold text-slate-900">
-            Supuestos de Planificación ({b.projectionName})
-          </h2>
+          <div>
+            <h2 className="text-sm font-bold text-slate-900">
+              Supuestos Editables de Planificación
+            </h2>
+            <p className="text-[11px] text-slate-500">
+              Modifica cualquier parámetro para proyectar otro escenario o empresa
+            </p>
+          </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs">
+            <div className="col-span-2">
+              <label className="block font-medium text-slate-600 mb-1">
+                Nombre de la Proyección
+              </label>
+              <input
+                type="text"
+                value={b.projectionName}
+                onChange={(e) => updateMasterBudget({ projectionName: e.target.value })}
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
+              />
+            </div>
             <div>
               <label className="block font-medium text-slate-600 mb-1">
                 Unidades a Vender
               </label>
               <input
                 type="number"
+                step="any"
                 value={b.projectedUnitsToSell}
                 onChange={(e) =>
                   updateMasterBudget({ projectedUnitsToSell: Number(e.target.value) })
@@ -117,10 +147,11 @@ export const BudgetingPage: React.FC = () => {
             </div>
             <div>
               <label className="block font-medium text-slate-600 mb-1">
-                Precio Venta (C$)
+                Precio Venta Unit. (C$)
               </label>
               <input
                 type="number"
+                step="any"
                 value={b.projectedUnitPrice}
                 onChange={(e) =>
                   updateMasterBudget({ projectedUnitPrice: Number(e.target.value) })
@@ -134,6 +165,7 @@ export const BudgetingPage: React.FC = () => {
               </label>
               <input
                 type="number"
+                step="any"
                 value={b.projectedUnitCost}
                 onChange={(e) =>
                   updateMasterBudget({ projectedUnitCost: Number(e.target.value) })
@@ -149,6 +181,7 @@ export const BudgetingPage: React.FC = () => {
                 type="number"
                 min={0}
                 max={100}
+                step="any"
                 value={b.cashSalesPct}
                 onChange={(e) =>
                   updateMasterBudget({ cashSalesPct: Number(e.target.value) })
@@ -158,27 +191,15 @@ export const BudgetingPage: React.FC = () => {
             </div>
             <div>
               <label className="block font-medium text-slate-600 mb-1">
-                Inv. Inicial (Unid.)
+                Cobros Cartera Ant. (C$)
               </label>
               <input
                 type="number"
-                value={b.initialInventoryUnits}
-                onChange={(e) =>
-                  updateMasterBudget({ initialInventoryUnits: Number(e.target.value) })
-                }
-                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
-              />
-            </div>
-            <div>
-              <label className="block font-medium text-slate-600 mb-1">
-                Inv. Final Deseado (Unid.)
-              </label>
-              <input
-                type="number"
-                value={b.desiredEndingInventoryUnits}
+                step="any"
+                value={b.collectionsFromPriorSales}
                 onChange={(e) =>
                   updateMasterBudget({
-                    desiredEndingInventoryUnits: Number(e.target.value),
+                    collectionsFromPriorSales: Number(e.target.value),
                   })
                 }
                 className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
@@ -192,9 +213,56 @@ export const BudgetingPage: React.FC = () => {
                 type="number"
                 min={0}
                 max={100}
+                step="any"
                 value={b.cashPurchasesPct}
                 onChange={(e) =>
                   updateMasterBudget({ cashPurchasesPct: Number(e.target.value) })
+                }
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-600 mb-1">
+                Inv. Inicial (Unid.)
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={b.initialInventoryUnits}
+                onChange={(e) =>
+                  updateMasterBudget({ initialInventoryUnits: Number(e.target.value) })
+                }
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-600 mb-1">
+                Inv. Final Deseado (Unid.)
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={b.desiredEndingInventoryUnits}
+                onChange={(e) =>
+                  updateMasterBudget({
+                    desiredEndingInventoryUnits: Number(e.target.value),
+                  })
+                }
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-600 mb-1">
+                Pago Proveed. Ant. (C$)
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={b.paymentsForPriorPurchases}
+                onChange={(e) =>
+                  updateMasterBudget({
+                    paymentsForPriorPurchases: Number(e.target.value),
+                  })
                 }
                 className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
               />
@@ -205,9 +273,38 @@ export const BudgetingPage: React.FC = () => {
               </label>
               <input
                 type="number"
+                step="any"
                 value={b.fixedOperatingExpenses}
                 onChange={(e) =>
                   updateMasterBudget({ fixedOperatingExpenses: Number(e.target.value) })
+                }
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-600 mb-1">
+                % Gasto Op. Variable
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={b.variableOpExpensePct}
+                onChange={(e) =>
+                  updateMasterBudget({ variableOpExpensePct: Number(e.target.value) })
+                }
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-600 mb-1">
+                Depreciación Proy. (C$)
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={b.nonCashDepreciation}
+                onChange={(e) =>
+                  updateMasterBudget({ nonCashDepreciation: Number(e.target.value) })
                 }
                 className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
               />
@@ -218,9 +315,66 @@ export const BudgetingPage: React.FC = () => {
               </label>
               <input
                 type="number"
+                step="any"
                 value={b.capexOutflow}
                 onChange={(e) =>
                   updateMasterBudget({ capexOutflow: Number(e.target.value) })
+                }
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-600 mb-1">
+                Intereses Proy. (C$)
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={b.interestPayment}
+                onChange={(e) =>
+                  updateMasterBudget({ interestPayment: Number(e.target.value) })
+                }
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-600 mb-1">
+                Pago Impuestos (C$)
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={b.taxPayment}
+                onChange={(e) =>
+                  updateMasterBudget({ taxPayment: Number(e.target.value) })
+                }
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-600 mb-1">
+                Dividendos Proy. (C$)
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={b.dividendPayment}
+                onChange={(e) =>
+                  updateMasterBudget({ dividendPayment: Number(e.target.value) })
+                }
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-medium text-slate-600 mb-1">
+                Saldo Inicial Caja (C$)
+              </label>
+              <input
+                type="number"
+                step="any"
+                value={b.initialCashBalance}
+                onChange={(e) =>
+                  updateMasterBudget({ initialCashBalance: Number(e.target.value) })
                 }
                 className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
               />
@@ -231,6 +385,7 @@ export const BudgetingPage: React.FC = () => {
               </label>
               <input
                 type="number"
+                step="any"
                 value={b.minimumCashRequired}
                 onChange={(e) =>
                   updateMasterBudget({ minimumCashRequired: Number(e.target.value) })
@@ -301,7 +456,9 @@ export const BudgetingPage: React.FC = () => {
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
-                <span className="text-slate-500 block">Gastos Variables ({b.variableOpExpensePct}%):</span>
+                <span className="text-slate-500 block">
+                  Gastos Variables ({b.variableOpExpensePct}%):
+                </span>
                 <strong className="text-sm">
                   {formatCurrency(mb.variableOperatingExpenses)}
                 </strong>
@@ -381,8 +538,8 @@ export const BudgetingPage: React.FC = () => {
                 </tr>
                 <tr
                   className={`font-bold ${mb.cashSurplusOrDeficit >= 0
-                      ? 'bg-emerald-700 text-white'
-                      : 'bg-rose-700 text-white'
+                    ? 'bg-emerald-700 text-white'
+                    : 'bg-rose-700 text-white'
                     }`}
                 >
                   <td className="px-4 py-2.5">
@@ -402,4 +559,3 @@ export const BudgetingPage: React.FC = () => {
     </div>
   );
 };
-

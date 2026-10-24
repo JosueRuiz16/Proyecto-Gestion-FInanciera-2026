@@ -1,10 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
-import { INITIAL_DEMO_STATE } from '../seed/demoData';
+import { INITIAL_DEMO_STATE, createBlankCaseState } from '../seed/demoData';
 import { createPersonalBudgetsByUser } from '../seed/personalBudgets';
 import { FinancialSystemState } from '../types/financial';
 
-// v2: incorpora presupuestos personales por usuario.
-const STORAGE_KEY = 'gfo_is2122_financial_system_state_v2';
+// v3: Caso Oficial del PDF "Corporación Agrícola, S. A. y subsidiarias (2023-2024)"
+const STORAGE_KEY = 'gfo_is2122_financial_system_state_v3';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -14,8 +14,7 @@ export const supabaseClient =
 
 export class FinancialRepository {
   /**
-   * Carga el estado persistido o inicializa con el Caso Demostrativo Oficial.
-   * Si un estado guardado no trae presupuestos por usuario, se completan desde la semilla.
+   * Carga el estado persistido o inicializa con el Caso del PDF (Corporación Agrícola, S.A.).
    */
   static loadState(): FinancialSystemState {
     try {
@@ -42,10 +41,24 @@ export class FinancialRepository {
     }
   }
 
-  /** Restaura el caso demostrativo original. */
-  static resetToDemoState(): FinancialSystemState {
+  /** Carga el ejemplo completo del PDF (Corporación Agrícola, S. A. y subsidiarias 2023-2024). */
+  static resetToDemoState(
+    preservePersonalBudgets?: FinancialSystemState['personalBudgetsByUser']
+  ): FinancialSystemState {
     const fresh = structuredClone(INITIAL_DEMO_STATE);
+    if (preservePersonalBudgets) {
+      fresh.personalBudgetsByUser = preservePersonalBudgets;
+    }
     this.saveState(fresh);
     return fresh;
+  }
+
+  /** Limpia los módulos empresariales para llenar cualquier otro caso desde cero. */
+  static resetToBlankCase(
+    preservePersonalBudgets?: FinancialSystemState['personalBudgetsByUser']
+  ): FinancialSystemState {
+    const blank = createBlankCaseState(preservePersonalBudgets);
+    this.saveState(blank);
+    return blank;
   }
 }

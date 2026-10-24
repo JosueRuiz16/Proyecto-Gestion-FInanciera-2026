@@ -47,6 +47,7 @@ export const MainLayout: React.FC = () => {
     setActivePeriodId,
     setComparisonPeriodId,
     resetDemoData,
+    clearForNewCase,
   } = useFinancialSystem();
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -352,6 +353,41 @@ export const MainLayout: React.FC = () => {
                   </>
                 )}
               </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      '¿Cargar todos los datos del Ejemplo del PDF (Corporación Agrícola, S. A. y subsidiarias 2023-2024) en todos los módulos?'
+                    )
+                  ) {
+                    resetDemoData();
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-colors"
+                title="Cargar todos los datos del PDF (Corporación Agrícola, S.A. 2023-2024)"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Cargar Ejemplo</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      '¿Limpiar los datos actuales para llenar un nuevo caso / otra empresa desde cero?'
+                    )
+                  ) {
+                    clearForNewCase();
+                  }
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-emerald-950/70 dark:hover:bg-emerald-900/70 text-slate-700 dark:text-emerald-200 border border-slate-300 dark:border-emerald-700/50 transition-colors"
+                title="Poner cuentas en cero para ingresar cualquier otro caso"
+              >
+                <span>Nuevo Caso</span>
+              </button>
 
               <label className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
                 Base

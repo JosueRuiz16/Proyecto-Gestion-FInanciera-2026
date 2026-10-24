@@ -32,6 +32,7 @@ export interface DuPontAnalysisResult {
   roaDuPontPct: number; // ROA (%) = Margen Neto * Rotación de Activos
   equityMultiplier: number; // Multiplicador del capital (veces) = Total Activos / Total Patrimonio
   roeDuPontPct: number; // ROE (%) = ROA * Multiplicador del Capital
+  roeDirectPct: number; // ROE directo (%) = (Utilidad Neta / Total Patrimonio) * 100
   interpretation: string;
 }
 
@@ -472,6 +473,10 @@ export function computeDuPontAnalysis(totals: ComputedStatementTotals): DuPontAn
   const equityMultiplier =
     totals.totalPatrimonio > 0 ? totals.totalActivos / totals.totalPatrimonio : 0;
   const roeDuPontPct = roaDuPontPct * equityMultiplier;
+  const roeDirectPct =
+    totals.totalPatrimonio > 0
+      ? (totals.utilidadNeta / totals.totalPatrimonio) * 100
+      : 0;
 
   return {
     netProfitMarginPct: Number(netProfitMarginPct.toFixed(2)),
@@ -479,6 +484,7 @@ export function computeDuPontAnalysis(totals: ComputedStatementTotals): DuPontAn
     roaDuPontPct: Number(roaDuPontPct.toFixed(2)),
     equityMultiplier: Number(equityMultiplier.toFixed(2)),
     roeDuPontPct: Number(roeDuPontPct.toFixed(2)),
+    roeDirectPct: Number(roeDirectPct.toFixed(2)),
     interpretation: `Según el Sistema DuPont, el ROE del ${roeDuPontPct.toFixed(
       2
     )}% se explica por la combinación de: (1) Eficiencia en costos/precios con un Margen Neto de ${netProfitMarginPct.toFixed(

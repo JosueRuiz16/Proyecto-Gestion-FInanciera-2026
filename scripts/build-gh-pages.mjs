@@ -18,8 +18,11 @@ const devIndexHtml = `<!doctype html>
 
 fs.writeFileSync('index.html', devIndexHtml, 'utf8');
 
-// 2. Ejecutar TypeScript y Vite build hacia docs/
-execSync('npx tsc -b && npx vite build --outDir docs --emptyOutDir', { stdio: 'inherit' });
+// 2. Ejecutar TypeScript y Vite build hacia docs/ usando el propio ejecutable de Node
+execSync(`"${process.execPath}" ./node_modules/typescript/bin/tsc -b`, { stdio: 'inherit' });
+execSync(`"${process.execPath}" ./node_modules/vite/bin/vite.js build --outDir docs --emptyOutDir`, {
+  stdio: 'inherit',
+});
 
 // 3. Crear .nojekyll en raíz y en docs/
 fs.writeFileSync('.nojekyll', '', 'utf8');

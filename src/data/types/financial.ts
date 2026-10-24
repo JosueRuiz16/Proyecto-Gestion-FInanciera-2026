@@ -43,9 +43,15 @@ export interface FinancialAccountItem {
 
 export interface FinancialPeriod {
   id: string;
-  name: string; // '2024', '2025'
+  name: string; // '2023', '2024'
   year: number;
   taxRate: number; // Porcentaje ej. 30 para 30%
+  /**
+   * Monto explícito de Provisión para Impuesto sobre la Renta (C$).
+   * Si se define (ej. en estados auditados con pago mínimo definitivo o impuesto diferido),
+   * se utiliza este valor exacto; si es undefined/null, se calcula como UAI * (taxRate / 100).
+   */
+  taxAmount?: number | null;
 }
 
 export interface CompanyProfile {

@@ -158,8 +158,26 @@ export const InventoryPage: React.FC = () => {
             <tbody>
               {inventoryResult.items.map((item) => (
                 <tr key={item.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-3 py-2 font-mono text-slate-500">{item.sku}</td>
-                  <td className="px-3 py-2 font-medium text-slate-900">{item.name}</td>
+                  <td className="px-2 py-2">
+                    <input
+                      type="text"
+                      value={item.sku}
+                      onChange={(e) =>
+                        updateInventoryProduct(item.id, { sku: e.target.value })
+                      }
+                      className="w-24 font-mono text-slate-600 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-1.5 py-0.5"
+                    />
+                  </td>
+                  <td className="px-2 py-2">
+                    <input
+                      type="text"
+                      value={item.name}
+                      onChange={(e) =>
+                        updateInventoryProduct(item.id, { name: e.target.value })
+                      }
+                      className="w-full min-w-[200px] font-medium text-slate-900 bg-transparent border border-transparent hover:border-slate-300 focus:border-blue-500 focus:bg-white rounded px-1.5 py-0.5"
+                    />
+                  </td>
                   <td className="px-3 py-2 text-right">
                     <input
                       type="number"

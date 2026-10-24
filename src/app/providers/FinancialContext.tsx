@@ -60,22 +60,34 @@ interface FinancialContextValue {
   // Acciones de actualización
   setActivePeriodId: (id: string) => void;
   setComparisonPeriodId: (id: string) => void;
+  updatePeriod: (periodId: string, patch: Partial<FinancialPeriod>) => void;
   updateAccountBalance: (accountId: string, periodId: string, amount: number) => void;
+  updateAccountMeta: (
+    accountId: string,
+    patch: Partial<Pick<FinancialAccountItem, 'code' | 'name' | 'category' | 'subType'>>
+  ) => void;
   addAccount: (account: Omit<FinancialAccountItem, 'id'>) => void;
+  removeAccount: (accountId: string) => void;
   updateCompanyInfo: (patch: Partial<FinancialSystemState['company']>) => void;
   updateCvuInput: (patch: Partial<CvuLeverageInput>) => void;
   syncCvuWithIncomeStatement: () => void;
   updateCashFlowInitialBalance: (amount: number) => void;
+  updateCashFlowEntry: (id: string, patch: Partial<Omit<CashFlowEntry, 'id'>>) => void;
   addCashFlowEntry: (entry: Omit<CashFlowEntry, 'id'>) => void;
   removeCashFlowEntry: (id: string) => void;
+  syncCashFlowInitialWithBalance: () => void;
   updateMasterBudget: (patch: Partial<MasterBudgetInput>) => void;
+  syncMasterBudgetWithBalance: () => void;
   addPersonalTransaction: (tx: Omit<PersonalTransaction, 'id'>) => void;
   removePersonalTransaction: (id: string) => void;
   updatePersonalSavingsGoal: (pct: number) => void;
   updateInventoryProduct: (id: string, patch: Partial<InventoryProduct>) => void;
   addInventoryProduct: (prod: Omit<InventoryProduct, 'id'>) => void;
   removeInventoryProduct: (id: string) => void;
+  /** Carga el ejemplo completo del PDF (Corporación Agrícola, S. A. y subsidiarias 2023-2024). */
   resetDemoData: () => void;
+  /** Limpia todos los módulos para llenar cualquier otro caso o empresa desde cero. */
+  clearForNewCase: () => void;
 }
 
 const FinancialContext = createContext<FinancialContextValue | null>(null);
@@ -203,6 +215,13 @@ export const FinancialProvider: React.FC<{
   const setComparisonPeriodId = (id: string) =>
     setState((prev) => ({ ...prev, comparisonPeriodId: id }));
 
+  const updatePeriod = (periodId: string, patch: Partial<FinancialPeriod>) => {
+    setState((prev) => ({
+      ...prev,
+      periods: prev.periods.map((p) => (p.id === periodId ? { ...p, ...patch } : p)),
+    }));
+  };
+
   const updateAccountBalance = (
     accountId: string,
     periodId: string,
@@ -221,11 +240,30 @@ export const FinancialProvider: React.FC<{
     }));
   };
 
+  const updateAccountMeta = (
+    accountId: string,
+    patch: Partial<Pick<FinancialAccountItem, 'code' | 'name' | 'category' | 'subType'>>
+  ) => {
+    setState((prev) => ({
+      ...prev,
+      accounts: prev.accounts.map((acc) =>
+        acc.id === accountId ? { ...acc, ...patch } : acc
+      ),
+    }));
+  };
+
   const addAccount = (account: Omit<FinancialAccountItem, 'id'>) => {
     const id = `acc-${Date.now()}`;
     setState((prev) => ({
       ...prev,
       accounts: [...prev.accounts, { ...account, id }],
+    }));
+  };
+
+  const removeAccount = (accountId: string) => {
+    setState((prev) => ({
+      ...prev,
+      accounts: prev.accounts.filter((acc) => acc.id !== accountId),
     }));
   };
 
@@ -248,13 +286,15 @@ export const FinancialProvider: React.FC<{
    * del módulo C-V-U y Apalancamiento con el Estado de Resultados del período activo.
    */
   const syncCvuWithIncomeStatement = () => {
-    const units = state.cvuInput.currentUnitsSold > 0 ? state.cvuInput.currentUnitsSold : 10000;
+    const units =
+      state.cvuInput.currentUnitsSold > 0 ? state.cvuInput.currentUnitsSold : 1000000;
     const unitPrice = Number((activeTotals.ventasNetas / units).toFixed(2));
     const unitVariableCost = Number((activeTotals.costoBienesVendidos / units).toFixed(2));
     setState((prev) => ({
       ...prev,
       cvuInput: {
         ...prev.cvuInput,
+        currentUnitsSold: units,
         unitPrice,
         unitVariableCost,
         fixedOperatingCosts: activeTotals.totalGastosOperativos,
@@ -266,6 +306,18 @@ export const FinancialProvider: React.FC<{
 
   const updateCashFlowInitialBalance = (amount: number) => {
     setState((prev) => ({ ...prev, cashFlowInitialBalance: Number(amount) || 0 }));
+  };
+
+  const updateCashFlowEntry = (
+    id: string,
+    patch: Partial<Omit<CashFlowEntry, 'id'>>
+  ) => {
+    setState((prev) => ({
+      ...prev,
+      cashFlowEntries: prev.cashFlowEntries.map((e) =>
+        e.id === id ? { ...e, ...patch } : e
+      ),
+    }));
   };
 
   const addCashFlowEntry = (entry: Omit<CashFlowEntry, 'id'>) => {
@@ -283,10 +335,29 @@ export const FinancialProvider: React.FC<{
     }));
   };
 
+  const syncCashFlowInitialWithBalance = () => {
+    setState((prev) => ({
+      ...prev,
+      cashFlowInitialBalance: comparisonTotals.efectivo,
+    }));
+  };
+
   const updateMasterBudget = (patch: Partial<MasterBudgetInput>) => {
     setState((prev) => ({
       ...prev,
       masterBudget: { ...prev.masterBudget, ...patch },
+    }));
+  };
+
+  const syncMasterBudgetWithBalance = () => {
+    setState((prev) => ({
+      ...prev,
+      masterBudget: {
+        ...prev.masterBudget,
+        initialCashBalance: activeTotals.efectivo,
+        collectionsFromPriorSales: activeTotals.cuentasPorCobrar,
+        paymentsForPriorPurchases: activeTotals.cuentasPorPagar,
+      },
     }));
   };
 
@@ -337,8 +408,13 @@ export const FinancialProvider: React.FC<{
   };
 
   const resetDemoData = () => {
-    const fresh = FinancialRepository.resetToDemoState();
+    const fresh = FinancialRepository.resetToDemoState(rawState.personalBudgetsByUser);
     setState(fresh);
+  };
+
+  const clearForNewCase = () => {
+    const blank = FinancialRepository.resetToBlankCase(rawState.personalBudgetsByUser);
+    setState(blank);
   };
 
   return (
@@ -359,15 +435,21 @@ export const FinancialProvider: React.FC<{
         inventoryResult,
         setActivePeriodId,
         setComparisonPeriodId,
+        updatePeriod,
         updateAccountBalance,
+        updateAccountMeta,
         addAccount,
+        removeAccount,
         updateCompanyInfo,
         updateCvuInput,
         syncCvuWithIncomeStatement,
         updateCashFlowInitialBalance,
+        updateCashFlowEntry,
         addCashFlowEntry,
         removeCashFlowEntry,
+        syncCashFlowInitialWithBalance,
         updateMasterBudget,
+        syncMasterBudgetWithBalance,
         addPersonalTransaction,
         removePersonalTransaction,
         updatePersonalSavingsGoal,
@@ -375,6 +457,7 @@ export const FinancialProvider: React.FC<{
         addInventoryProduct,
         removeInventoryProduct,
         resetDemoData,
+        clearForNewCase,
       }}
     >
       {children}
@@ -389,4 +472,3 @@ export function useFinancialSystem(): FinancialContextValue {
   }
   return ctx;
 }
-
