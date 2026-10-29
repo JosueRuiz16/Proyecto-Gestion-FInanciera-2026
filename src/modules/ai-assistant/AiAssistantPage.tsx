@@ -204,8 +204,8 @@ export const AiAssistantPage: React.FC = () => {
               </h1>
               <span
                 className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${geminiActive
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                  : 'bg-blue-50 text-blue-700 border-blue-200'
                   }`}
               >
                 {geminiActive
@@ -261,7 +261,7 @@ export const AiAssistantPage: React.FC = () => {
               type="password"
               value={apiKeyInput}
               onChange={(e) => setApiKeyInput(e.target.value)}
-              placeholder="Pega tu clave aquí (ej. AIzaSy...)"
+              placeholder="Pega tu clave aquí (ej. AQ.Ab8... o AIzaSy...)"
               className="flex-1 min-w-[240px] px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-mono"
             />
             <button
@@ -308,8 +308,8 @@ export const AiAssistantPage: React.FC = () => {
                   type="button"
                   onClick={() => setInputMode('FILE')}
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${inputMode === 'FILE'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
                     }`}
                 >
                   Subir Archivo
@@ -318,8 +318,8 @@ export const AiAssistantPage: React.FC = () => {
                   type="button"
                   onClick={() => setInputMode('TEXT')}
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${inputMode === 'TEXT'
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-slate-600 hover:text-slate-900'
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
                     }`}
                 >
                   Pegar Texto / Tabla
@@ -450,8 +450,8 @@ export const AiAssistantPage: React.FC = () => {
             {extractionResult && (
               <div
                 className={`p-3.5 rounded-2xl border space-y-2.5 ${extractionResult.success
-                    ? 'bg-emerald-50/70 border-emerald-300'
-                    : 'bg-amber-50/80 border-amber-300'
+                  ? 'bg-emerald-50/70 border-emerald-300'
+                  : 'bg-amber-50/80 border-amber-300'
                   }`}
               >
                 <div className="flex items-start gap-2">
@@ -642,8 +642,8 @@ export const AiAssistantPage: React.FC = () => {
                 >
                   <div
                     className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-sm ${msg.role === 'user'
-                        ? 'bg-blue-600 text-white rounded-br-sm'
-                        : 'bg-white/90 text-slate-800 border border-slate-200/90 rounded-bl-sm'
+                      ? 'bg-blue-600 text-white rounded-br-sm'
+                      : 'bg-white/90 text-slate-800 border border-slate-200/90 rounded-bl-sm'
                       }`}
                   >
                     <div className="whitespace-pre-wrap">{msg.content}</div>

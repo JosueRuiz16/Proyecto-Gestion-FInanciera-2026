@@ -92,6 +92,65 @@ export function hasGeminiApiKey(): boolean {
   return getStoredGeminiApiKey().length > 10;
 }
 
+/**
+ * Invoca Google Gemini soportando tanto claves Auth modernas ("AQ....") como estándar ("AIza...")
+ * en Gemini Developer API (x-goog-api-key) y Vertex AI Express Mode.
+ */
+async function callGoogleGeminiApi(
+  apiKey: string,
+  payload: Record<string, unknown>
+): Promise<{ ok: boolean; text: string; errorMsg?: string }> {
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash'];
+  const isAqKey = apiKey.startsWith('AQ.');
+
+  // Ordenar endpoints según el formato de la clave para responder más rápido
+  const buildEndpoints = (model: string) => {
+    const aiStudio = {
+      url: `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
+      } as Record<string, string>,
+    };
+    const vertexExpress = {
+      url: `https://aiplatform.googleapis.com/v1/publishers/google/models/${model}:generateContent?key=${encodeURIComponent(
+        apiKey
+      )}`,
+      headers: {
+        'Content-Type': 'application/json',
+      } as Record<string, string>,
+    };
+    return isAqKey ? [aiStudio, vertexExpress] : [aiStudio];
+  };
+
+  let lastError = '';
+  for (const model of models) {
+    for (const ep of buildEndpoints(model)) {
+      try {
+        const res = await fetch(ep.url, {
+          method: 'POST',
+          headers: ep.headers,
+          body: JSON.stringify(payload),
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          lastError = `HTTP ${res.status}: ${errText.slice(0, 160)}`;
+          continue;
+        }
+        const data = await res.json();
+        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        if (text) {
+          return { ok: true, text };
+        }
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : 'Error de red';
+      }
+    }
+  }
+
+  return { ok: false, text: '', errorMsg: lastError };
+}
+
 function formatRatioVal(r: FinancialRatioResult): string {
   if (r.value === null || Number.isNaN(r.value)) return 'N/D';
   if (r.unit === '%') return `${r.value.toFixed(2)}%`;
@@ -713,48 +772,26 @@ Reglas importantes:
         });
       }
 
-      const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-      let lastError = '';
+      const geminiRes = await callGoogleGeminiApi(apiKey, {
+        contents: [{ role: 'user', parts }],
+        generationConfig: {
+          temperature: 0.1,
+          responseMimeType: 'application/json',
+        },
+      });
 
-      for (const model of models) {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(
-            apiKey
-          )}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ role: 'user', parts }],
-              generationConfig: {
-                temperature: 0.1,
-                responseMimeType: 'application/json',
-              },
-            }),
-          }
-        );
-
-        if (!res.ok) {
-          const errText = await res.text();
-          lastError = `HTTP ${res.status}: ${errText.slice(0, 160)}`;
-          continue;
-        }
-
-        const data = await res.json();
-        const rawJsonText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        if (rawJsonText) {
-          const cleaned = rawJsonText
-            .replace(/^```json\s*/i, '')
-            .replace(/```\s*$/i, '')
-            .trim();
-          const parsed = JSON.parse(cleaned);
-          return normalizeAndEnrichExtractedState(parsed);
-        }
+      if (geminiRes.ok && geminiRes.text) {
+        const cleaned = geminiRes.text
+          .replace(/^```json\s*/i, '')
+          .replace(/```\s*$/i, '')
+          .trim();
+        const parsed = JSON.parse(cleaned);
+        return normalizeAndEnrichExtractedState(parsed);
       }
 
       const localFallback = parseFinancialTextLocally(fileText || pastedText || '');
       localFallback.warnings = [
-        `No se pudo conectar con Gemini API (${lastError}). Se utilizó el Motor Financiero Local integrado.`,
+        `No se pudo conectar con Gemini API (${geminiRes.errorMsg || 'Sin respuesta'}). Se utilizó el Motor Financiero Local integrado.`,
       ];
       return localFallback;
     } catch (err) {
@@ -987,35 +1024,22 @@ Tienes acceso en tiempo real a TODOS los módulos de la empresa activa:
         parts: [{ text: m.content }],
       }));
 
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(
-          apiKey
-        )}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: systemContext }] },
-            contents: [
-              ...recentTurns,
-              { role: 'user', parts: [{ text: userMessage }] },
-            ],
-            generationConfig: {
-              temperature: 0.25,
-            },
-          }),
-        }
-      );
+      const geminiRes = await callGoogleGeminiApi(apiKey, {
+        systemInstruction: { parts: [{ text: systemContext }] },
+        contents: [
+          ...recentTurns,
+          { role: 'user', parts: [{ text: userMessage }] },
+        ],
+        generationConfig: {
+          temperature: 0.25,
+        },
+      });
 
-      if (res.ok) {
-        const data = await res.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          return {
-            reply: text,
-            engine: 'GEMINI_AI',
-          };
-        }
+      if (geminiRes.ok && geminiRes.text) {
+        return {
+          reply: geminiRes.text,
+          engine: 'GEMINI_AI',
+        };
       }
     } catch {
       // Fallback silencioso al motor financiero local

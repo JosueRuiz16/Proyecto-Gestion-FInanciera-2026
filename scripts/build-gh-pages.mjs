@@ -19,9 +19,11 @@ const devIndexHtml = `<!doctype html>
 fs.writeFileSync('index.html', devIndexHtml, 'utf8');
 
 // 2. Ejecutar TypeScript y Vite build hacia docs/ usando el propio ejecutable de Node
+// Se limpia VITE_GEMINI_API_KEY en el build estático para evitar exponer claves en repositorios públicos (GitHub Push Protection).
 execSync(`"${process.execPath}" ./node_modules/typescript/bin/tsc -b`, { stdio: 'inherit' });
 execSync(`"${process.execPath}" ./node_modules/vite/bin/vite.js build --outDir docs --emptyOutDir`, {
   stdio: 'inherit',
+  env: { ...process.env, VITE_GEMINI_API_KEY: '' },
 });
 
 // 3. Crear .nojekyll en raíz y en docs/
