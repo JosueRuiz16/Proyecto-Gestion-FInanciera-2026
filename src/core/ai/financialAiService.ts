@@ -134,7 +134,12 @@ async function callGoogleGeminiApi(
         });
         if (!res.ok) {
           const errText = await res.text();
-          lastError = `HTTP ${res.status}: ${errText.slice(0, 160)}`;
+          try {
+            const errJson = JSON.parse(errText);
+            lastError = `HTTP ${res.status}: ${errJson?.error?.message || errText.slice(0, 420)}`;
+          } catch {
+            lastError = `HTTP ${res.status}: ${errText.slice(0, 420)}`;
+          }
           continue;
         }
         const data = await res.json();
@@ -184,13 +189,52 @@ async function extractReadableTextFromFile(file: File): Promise<string> {
     ) {
       return new TextDecoder('utf-8').decode(buffer);
     }
-    const raw = new TextDecoder('latin1').decode(buffer);
+
+    const bytes = new Uint8Array(buffer);
+    const raw = new TextDecoder('latin1').decode(bytes);
+    const extractedLines: string[] = [file.name.replace(/\.pdf$/i, '')];
+
+    // Intentar descomprimir flujos FlateDecode de PDFs digitales usando DecompressionStream nativo
+    if (typeof DecompressionStream !== 'undefined' && file.name.toLowerCase().endsWith('.pdf')) {
+      const streamRegex = /stream\r?\n/g;
+      let match: RegExpExecArray | null;
+      while ((match = streamRegex.exec(raw)) !== null) {
+        const start = match.index + match[0].length;
+        const end = raw.indexOf('endstream', start);
+        if (end > start && end - start < 500000) {
+          let sliceEnd = end;
+          while (sliceEnd > start && (bytes[sliceEnd - 1] === 10 || bytes[sliceEnd - 1] === 13)) {
+            sliceEnd--;
+          }
+          try {
+            const ds = new DecompressionStream('deflate');
+            const writer = ds.writable.getWriter();
+            writer.write(bytes.slice(start, sliceEnd)).catch(() => { });
+            writer.close().catch(() => { });
+            const decompressedBuf = await new Response(ds.readable).arrayBuffer();
+            const textChunk = new TextDecoder('latin1').decode(decompressedBuf);
+            // Extraer textos de operadores PDF Tj y TJ agrupando por bloques o saltos Td/TD/T*
+            const tokens = textChunk.match(/\((?:\\.|[^\\()])*\)|Td|TD|T\*|ET/g) || [];
+            let currentLine = '';
+            for (const tok of tokens) {
+              if (tok.startsWith('(')) {
+                currentLine += ' ' + tok.slice(1, -1).replace(/\\([()\\])/g, '$1');
+              } else if (currentLine.trim()) {
+                extractedLines.push(currentLine.trim());
+                currentLine = '';
+              }
+            }
+            if (currentLine.trim()) extractedLines.push(currentLine.trim());
+          } catch {
+            // Ignorar flujos no comprimidos con zlib estándar
+          }
+        }
+      }
+    }
+
     const matches = raw.match(/\(([^()]{2,120})\)/g);
-    const pdfText = matches ? matches.map((m) => m.slice(1, -1)).join(' ') : '';
-    return `${file.name}\n${pdfText}\n${raw.replace(/[^\x20-\x7EÁÉÍÓÚáéíóúÑñ]/g, ' ')}`.slice(
-      0,
-      120000
-    );
+    const pdfText = matches ? matches.map((m) => m.slice(1, -1)).join('\n') : '';
+    return `${extractedLines.join('\n')}\n${pdfText}`.slice(0, 120000);
   } catch {
     return file.name;
   }
