@@ -14,6 +14,7 @@ import { BudgetingPage } from '../../modules/budgeting/BudgetingPage';
 import { ProformaPage } from '../../modules/proforma/ProformaPage';
 import { PersonalBudgetPage } from '../../modules/personal-budget/PersonalBudgetPage';
 import { InventoryPage } from '../../modules/inventory/InventoryPage';
+import { AiAssistantPage } from '../../modules/ai-assistant/AiAssistantPage';
 
 /**
  * Ruta protegida: sin sesión redirige a /login. Con sesión, monta el contexto financiero
@@ -51,6 +52,7 @@ export const AppRouter: React.FC = () => {
               <Route path="/finanzas/proforma" element={<ProformaPage />} />
               <Route path="/personal/presupuesto" element={<PersonalBudgetPage />} />
               <Route path="/inventario" element={<InventoryPage />} />
+              <Route path="/ia-asistente" element={<AiAssistantPage />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Route>
           </Route>

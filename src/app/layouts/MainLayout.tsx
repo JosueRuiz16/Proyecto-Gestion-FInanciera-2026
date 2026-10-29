@@ -16,6 +16,7 @@ import {
   Moon,
   RotateCcw,
   Scale,
+  Sparkles,
   Sun,
   Wallet,
   UserCircle2,
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react';
 import { useFinancialSystem } from '../providers/FinancialContext';
 import { useAuth } from '../providers/AuthContext';
+import { FloatingAiChat } from '../../modules/ai-assistant/FloatingAiChat';
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard Principal', icon: LayoutDashboard },
@@ -35,6 +37,7 @@ const NAV_ITEMS = [
   { to: '/finanzas/proforma', label: 'G. Estados Proforma', icon: FolderKanban },
   { to: '/personal/presupuesto', label: 'H. Presupuesto Personal', icon: Wallet },
   { to: '/inventario', label: 'I. Control de Inventario', icon: Boxes },
+  { to: '/ia-asistente', label: 'J. Asistente IA y Lectura Docs', icon: Sparkles },
 ];
 
 export const MainLayout: React.FC = () => {
@@ -354,6 +357,15 @@ export const MainLayout: React.FC = () => {
                 )}
               </div>
 
+              <NavLink
+                to="/ia-asistente"
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white shadow-sm transition-colors"
+                title="Subir documento (PDF/Imagen/CSV/Texto) para autorellenar con IA o abrir el Chat Financiero"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>IA Autorelleno</span>
+              </NavLink>
+
               <button
                 type="button"
                 onClick={() => {
@@ -425,6 +437,7 @@ export const MainLayout: React.FC = () => {
           </main>
         </div>
       </div>
+      <FloatingAiChat />
     </div>
   );
 };

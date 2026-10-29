@@ -40,6 +40,7 @@ import {
   computeInventoryControl,
   computePersonalBudget,
 } from '../../core/finance/complementaryModules';
+import { ExtractedFinancialPatch } from '../../core/ai/financialAiService';
 
 interface FinancialContextValue {
   state: FinancialSystemState;
@@ -84,6 +85,9 @@ interface FinancialContextValue {
   updateInventoryProduct: (id: string, patch: Partial<InventoryProduct>) => void;
   addInventoryProduct: (prod: Omit<InventoryProduct, 'id'>) => void;
   removeInventoryProduct: (id: string) => void;
+  syncInventoryWithBalanceSheet: () => void;
+  /** Autorellena uno o todos los módulos financieros a partir de la extracción de IA de documentos. */
+  applyExtractedFinancialData: (patch: ExtractedFinancialPatch) => void;
   /** Carga el ejemplo completo del PDF (Corporación Agrícola, S. A. y subsidiarias 2023-2024). */
   resetDemoData: () => void;
   /** Limpia todos los módulos para llenar cualquier otro caso o empresa desde cero. */
@@ -407,6 +411,51 @@ export const FinancialProvider: React.FC<{
     }));
   };
 
+  /**
+   * Sincroniza el Valor Total del Inventario (Módulo I) hacia la cuenta de Inventario
+   * del Balance General (Módulo A) en el período activo.
+   */
+  const syncInventoryWithBalanceSheet = () => {
+    setState((prev) => ({
+      ...prev,
+      accounts: prev.accounts.map((acc) =>
+        acc.subType === 'INVENTARIO'
+          ? {
+            ...acc,
+            balances: {
+              ...acc.balances,
+              [activePeriod.id]: inventoryResult.totalInventoryValue,
+            },
+          }
+          : acc
+      ),
+    }));
+  };
+
+  const applyExtractedFinancialData = (patch: ExtractedFinancialPatch) => {
+    setState((prev) => ({
+      ...prev,
+      ...(patch.company ? { company: { ...prev.company, ...patch.company } } : {}),
+      ...(patch.periods && patch.periods.length > 0 ? { periods: patch.periods } : {}),
+      ...(patch.activePeriodId ? { activePeriodId: patch.activePeriodId } : {}),
+      ...(patch.comparisonPeriodId ? { comparisonPeriodId: patch.comparisonPeriodId } : {}),
+      ...(patch.accounts && patch.accounts.length > 0 ? { accounts: patch.accounts } : {}),
+      ...(patch.cvuInput ? { cvuInput: { ...prev.cvuInput, ...patch.cvuInput } } : {}),
+      ...(patch.cashFlowInitialBalance !== undefined
+        ? { cashFlowInitialBalance: patch.cashFlowInitialBalance }
+        : {}),
+      ...(patch.cashFlowEntries && patch.cashFlowEntries.length > 0
+        ? { cashFlowEntries: patch.cashFlowEntries }
+        : {}),
+      ...(patch.masterBudget
+        ? { masterBudget: { ...prev.masterBudget, ...patch.masterBudget } }
+        : {}),
+      ...(patch.inventoryProducts && patch.inventoryProducts.length > 0
+        ? { inventoryProducts: patch.inventoryProducts }
+        : {}),
+    }));
+  };
+
   const resetDemoData = () => {
     const fresh = FinancialRepository.resetToDemoState(rawState.personalBudgetsByUser);
     setState(fresh);
@@ -456,6 +505,8 @@ export const FinancialProvider: React.FC<{
         updateInventoryProduct,
         addInventoryProduct,
         removeInventoryProduct,
+        syncInventoryWithBalanceSheet,
+        applyExtractedFinancialData,
         resetDemoData,
         clearForNewCase,
       }}

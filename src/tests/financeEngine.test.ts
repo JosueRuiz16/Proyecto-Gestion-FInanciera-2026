@@ -15,6 +15,7 @@ import {
   computeInventoryControl,
   computePersonalBudget,
 } from '../core/finance/complementaryModules';
+import { extractFinancialDataFromDocument } from '../core/ai/financialAiService';
 
 describe('Motor Financiero GFO IS2122 - Verificación con Estados Auditados Corporación Agrícola, S.A. (2023-2024)', () => {
   const period2023 = INITIAL_DEMO_STATE.periods[0];
@@ -124,5 +125,29 @@ describe('Motor Financiero GFO IS2122 - Verificación con Estados Auditados Corp
     expect(inv.items[0].finalStock).toBe(848279);
     expect(inv.items[0].totalValue).toBe(848279000);
     expect(inv.productsInReorderAlert).toBe(2);
+  });
+
+  it('6. Verifica Lectura de Documentos IA y Autorelleno de todos los módulos', async () => {
+    const sampleTable = `Distribuidora Central, S.A.
+    Balance Comparativo 2023 y 2024
+    Efectivo en caja y bancos | 50,000,000 | 75,000,000
+    Cuentas por cobrar clientes | 80,000,000 | 95,000,000
+    Inventarios | 120,000,000 | 140,000,000
+    Propiedad planta y equipo | 250,000,000 | 290,000,000
+    Cuentas por pagar proveedores | 90,000,000 | 110,000,000
+    Préstamos largo plazo | 160,000,000 | 180,000,000
+    Capital social | 150,000,000 | 150,000,000
+    Utilidades retenidas | 100,000,000 | 160,000,000
+    Ventas netas | 600,000,000 | 720,000,000
+    Costo de ventas | 380,000,000 | 450,000,000
+    Gastos operativos | 110,000,000 | 130,000,000`;
+
+    const extracted = await extractFinancialDataFromDocument(null, sampleTable);
+    expect(extracted.success).toBe(true);
+    expect(extracted.patch.company?.name).toContain('Distribuidora Central');
+    expect(extracted.patch.accounts?.length).toBeGreaterThanOrEqual(10);
+    expect(extracted.patch.cvuInput?.unitPrice).toBeGreaterThan(0);
+    expect(extracted.patch.cashFlowEntries?.length).toBeGreaterThan(0);
+    expect(extracted.patch.inventoryProducts?.length).toBeGreaterThan(0);
   });
 });

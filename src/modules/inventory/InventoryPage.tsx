@@ -1,15 +1,18 @@
 import React, { useState } from 'react';
-import { AlertTriangle, CheckCircle2, PlusCircle, Trash2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, Calculator, CheckCircle2, PlusCircle, RefreshCw, Trash2 } from 'lucide-react';
 import { useFinancialSystem } from '../../app/providers/FinancialContext';
 import { AcademicDefenseCard } from '../../components/common/AcademicDefenseCard';
 import { formatCurrency, formatNumber } from '../../components/common/formatters';
 
 export const InventoryPage: React.FC = () => {
   const {
+    activePeriod,
     inventoryResult,
     updateInventoryProduct,
     addInventoryProduct,
     removeInventoryProduct,
+    syncInventoryWithBalanceSheet,
   } = useFinancialSystem();
 
   const [sku, setSku] = useState('');
@@ -40,17 +43,39 @@ export const InventoryPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <span className="text-xs font-bold uppercase tracking-wider text-blue-600">
-          Módulo Complementario Obligatorio I • Aplicación Práctica
-        </span>
-        <h1 className="text-xl font-bold text-slate-900">
-          Control Básico de Inventario y Valoración de Existencias
-        </h1>
-        <p className="text-xs text-slate-600">
-          Cálculo de existencia final, valoración monetaria del inventario, alertas de
-          stock mínimo y sugerencia de reposición vinculada a la planeación de compras.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <span className="text-xs font-bold uppercase tracking-wider text-blue-600">
+            Módulo Complementario Obligatorio I • Aplicación Práctica
+          </span>
+          <h1 className="text-xl font-bold text-slate-900">
+            Control Básico de Inventario y Valoración de Existencias
+          </h1>
+          <p className="text-xs text-slate-600">
+            Cálculo de existencia final, valoración monetaria del inventario (Nota 12), alertas de
+            stock mínimo y sugerencia de reposición vinculada al Balance General y Presupuesto de Compras.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={syncInventoryWithBalanceSheet}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-colors"
+            title="Actualiza la cuenta 1107 Inventarios del Balance General con el Valor Total de esta tabla"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Enviar Valor Total al Balance ({activePeriod.name})</span>
+          </button>
+
+          <Link
+            to="/finanzas/presupuestos"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-sm transition-colors"
+          >
+            <Calculator className="w-3.5 h-3.5" />
+            <span>Ver en Presupuesto de Compras →</span>
+          </Link>
+        </div>
       </div>
 
       <AcademicDefenseCard
