@@ -3,6 +3,7 @@ import { Calculator, EyeOff, RefreshCw } from 'lucide-react';
 import { useFinancialSystem } from '../../app/providers/FinancialContext';
 import { AcademicDefenseCard } from '../../components/common/AcademicDefenseCard';
 import { formatCurrency } from '../../components/common/formatters';
+import { NumberInput } from '../../components/common/NumberInput';
 
 export const LeveragePage: React.FC = () => {
   const {
@@ -146,8 +147,7 @@ export const LeveragePage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Unidades Vendidas (Q)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 value={cvu.currentUnitsSold}
                 onChange={(e) =>
                   updateCvuInput({ currentUnitsSold: Number(e.target.value) })
@@ -160,8 +160,7 @@ export const LeveragePage: React.FC = () => {
                 <label className="block font-medium text-slate-600 mb-1">
                   Precio Venta (C$)
                 </label>
-                <input
-                  type="number"
+                <NumberInput
                   value={cvu.unitPrice}
                   onChange={(e) => updateCvuInput({ unitPrice: Number(e.target.value) })}
                   className="w-full border border-slate-300 rounded-lg px-3 py-1.5 font-semibold"
@@ -171,8 +170,7 @@ export const LeveragePage: React.FC = () => {
                 <label className="block font-medium text-slate-600 mb-1">
                   Costo Var. Unit. (C$)
                 </label>
-                <input
-                  type="number"
+                <NumberInput
                   value={cvu.unitVariableCost}
                   onChange={(e) =>
                     updateCvuInput({ unitVariableCost: Number(e.target.value) })
@@ -185,8 +183,7 @@ export const LeveragePage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Costos Fijos Operativos (CF en C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 value={cvu.fixedOperatingCosts}
                 onChange={(e) =>
                   updateCvuInput({ fixedOperatingCosts: Number(e.target.value) })
@@ -198,8 +195,7 @@ export const LeveragePage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Intereses Financieros Anuales (I en C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 value={cvu.interestExpense}
                 onChange={(e) =>
                   updateCvuInput({ interestExpense: Number(e.target.value) })
@@ -211,8 +207,7 @@ export const LeveragePage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Dividendos Preferentes (DP en C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 value={cvu.preferredDividends}
                 onChange={(e) =>
                   updateCvuInput({ preferredDividends: Number(e.target.value) })

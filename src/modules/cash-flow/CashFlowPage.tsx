@@ -4,6 +4,7 @@ import { useFinancialSystem } from '../../app/providers/FinancialContext';
 import { CashFlowActivity, CashFlowDirection } from '../../data/types/financial';
 import { AcademicDefenseCard } from '../../components/common/AcademicDefenseCard';
 import { formatCurrency } from '../../components/common/formatters';
+import { NumberInput } from '../../components/common/NumberInput';
 
 export const CashFlowPage: React.FC = () => {
   const {
@@ -99,8 +100,7 @@ export const CashFlowPage: React.FC = () => {
                       </select>
                     </td>
                     <td className="px-3 py-1.5 text-right">
-                      <input
-                        type="number"
+                      <NumberInput
                         min={0}
                         step="any"
                         value={r.amount}
@@ -249,8 +249,7 @@ export const CashFlowPage: React.FC = () => {
             <h3 className="text-sm font-bold text-slate-900">
               Efectivo al Inicio del Año (C$)
             </h3>
-            <input
-              type="number"
+            <NumberInput
               step="any"
               value={state.cashFlowInitialBalance}
               onChange={(e) => updateCashFlowInitialBalance(Number(e.target.value))}
@@ -317,8 +316,7 @@ export const CashFlowPage: React.FC = () => {
               <label className="block text-xs font-medium text-slate-600 mb-1">
                 Monto en Córdobas (C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 required
                 min={0}

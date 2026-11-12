@@ -4,6 +4,7 @@ import { AlertTriangle, Calculator, CheckCircle2, PlusCircle, RefreshCw, Trash2 
 import { useFinancialSystem } from '../../app/providers/FinancialContext';
 import { AcademicDefenseCard } from '../../components/common/AcademicDefenseCard';
 import { formatCurrency, formatNumber } from '../../components/common/formatters';
+import { NumberInput } from '../../components/common/NumberInput';
 
 export const InventoryPage: React.FC = () => {
   const {
@@ -204,8 +205,7 @@ export const InventoryPage: React.FC = () => {
                     />
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
                       value={item.initialStock}
                       onChange={(e) =>
@@ -217,8 +217,7 @@ export const InventoryPage: React.FC = () => {
                     />
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
                       value={item.entries}
                       onChange={(e) =>
@@ -230,8 +229,7 @@ export const InventoryPage: React.FC = () => {
                     />
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
                       value={item.exits}
                       onChange={(e) =>
@@ -246,8 +244,7 @@ export const InventoryPage: React.FC = () => {
                     {formatNumber(item.finalStock, 0)} unid.
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
                       value={item.unitCost}
                       onChange={(e) =>
@@ -262,8 +259,7 @@ export const InventoryPage: React.FC = () => {
                     {formatCurrency(item.totalValue)}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    <input
-                      type="number"
+                    <NumberInput
                       min={0}
                       value={item.minStock}
                       onChange={(e) =>
@@ -341,8 +337,7 @@ export const InventoryPage: React.FC = () => {
           </div>
           <div>
             <label className="block font-medium text-slate-600 mb-1">Exist. Inicial</label>
-            <input
-              type="number"
+            <NumberInput
               min={0}
               value={initialStock}
               onChange={(e) => setInitialStock(e.target.value)}
@@ -351,8 +346,7 @@ export const InventoryPage: React.FC = () => {
           </div>
           <div>
             <label className="block font-medium text-slate-600 mb-1">Entradas</label>
-            <input
-              type="number"
+            <NumberInput
               min={0}
               value={entries}
               onChange={(e) => setEntries(e.target.value)}
@@ -361,8 +355,7 @@ export const InventoryPage: React.FC = () => {
           </div>
           <div>
             <label className="block font-medium text-slate-600 mb-1">Salidas</label>
-            <input
-              type="number"
+            <NumberInput
               min={0}
               value={exits}
               onChange={(e) => setExits(e.target.value)}
@@ -371,8 +364,7 @@ export const InventoryPage: React.FC = () => {
           </div>
           <div>
             <label className="block font-medium text-slate-600 mb-1">Costo Unit. (C$)</label>
-            <input
-              type="number"
+            <NumberInput
               min={0}
               value={unitCost}
               onChange={(e) => setUnitCost(e.target.value)}
@@ -381,8 +373,7 @@ export const InventoryPage: React.FC = () => {
           </div>
           <div>
             <label className="block font-medium text-slate-600 mb-1">Stock Mín.</label>
-            <input
-              type="number"
+            <NumberInput
               min={0}
               value={minStock}
               onChange={(e) => setMinStock(e.target.value)}

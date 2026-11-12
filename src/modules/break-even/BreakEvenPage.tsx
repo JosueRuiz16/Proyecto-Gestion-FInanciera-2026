@@ -13,6 +13,7 @@ import {
 import { useFinancialSystem } from '../../app/providers/FinancialContext';
 import { AcademicDefenseCard } from '../../components/common/AcademicDefenseCard';
 import { formatCurrency, formatNumber, formatPct } from '../../components/common/formatters';
+import { NumberInput } from '../../components/common/NumberInput';
 
 export const BreakEvenPage: React.FC = () => {
   const {
@@ -166,8 +167,7 @@ export const BreakEvenPage: React.FC = () => {
               <label className="block text-xs font-medium text-slate-700 mb-1">
                 Precio de Venta Unitario (P en C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 min={1}
                 value={cvu.unitPrice}
                 onChange={(e) => updateCvuInput({ unitPrice: Number(e.target.value) })}
@@ -179,8 +179,7 @@ export const BreakEvenPage: React.FC = () => {
               <label className="block text-xs font-medium text-slate-700 mb-1">
                 Costo Variable Unitario (CVu en C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 min={0}
                 value={cvu.unitVariableCost}
                 onChange={(e) =>
@@ -194,8 +193,7 @@ export const BreakEvenPage: React.FC = () => {
               <label className="block text-xs font-medium text-slate-700 mb-1">
                 Costos y Gastos Fijos Operativos (CF en C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 min={0}
                 value={cvu.fixedOperatingCosts}
                 onChange={(e) =>
@@ -209,8 +207,7 @@ export const BreakEvenPage: React.FC = () => {
               <label className="block text-xs font-medium text-slate-700 mb-1">
                 Volumen Actual de Ventas (Q en unidades)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 min={0}
                 value={cvu.currentUnitsSold}
                 onChange={(e) =>
@@ -231,8 +228,7 @@ export const BreakEvenPage: React.FC = () => {
                 <label className="block text-[11px] font-medium text-slate-600 mb-1">
                   Δ Precio (%)
                 </label>
-                <input
-                  type="number"
+                <NumberInput
                   value={cvu.priceChangePct}
                   onChange={(e) =>
                     updateCvuInput({ priceChangePct: Number(e.target.value) })
@@ -244,8 +240,7 @@ export const BreakEvenPage: React.FC = () => {
                 <label className="block text-[11px] font-medium text-slate-600 mb-1">
                   Δ Costo Variable (%)
                 </label>
-                <input
-                  type="number"
+                <NumberInput
                   value={cvu.variableCostChangePct}
                   onChange={(e) =>
                     updateCvuInput({ variableCostChangePct: Number(e.target.value) })
@@ -257,8 +252,7 @@ export const BreakEvenPage: React.FC = () => {
                 <label className="block text-[11px] font-medium text-slate-600 mb-1">
                   Δ Costos Fijos (%)
                 </label>
-                <input
-                  type="number"
+                <NumberInput
                   value={cvu.fixedCostChangePct}
                   onChange={(e) =>
                     updateCvuInput({ fixedCostChangePct: Number(e.target.value) })
@@ -270,8 +264,7 @@ export const BreakEvenPage: React.FC = () => {
                 <label className="block text-[11px] font-medium text-slate-600 mb-1">
                   Δ Volumen Q (%)
                 </label>
-                <input
-                  type="number"
+                <NumberInput
                   value={cvu.volumeChangePct}
                   onChange={(e) =>
                     updateCvuInput({ volumeChangePct: Number(e.target.value) })

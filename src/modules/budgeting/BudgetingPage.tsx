@@ -4,6 +4,7 @@ import { AlertTriangle, Boxes, RefreshCw } from 'lucide-react';
 import { useFinancialSystem } from '../../app/providers/FinancialContext';
 import { AcademicDefenseCard } from '../../components/common/AcademicDefenseCard';
 import { formatCurrency, formatNumber } from '../../components/common/formatters';
+import { NumberInput } from '../../components/common/NumberInput';
 
 export const BudgetingPage: React.FC = () => {
   const {
@@ -135,8 +136,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Unidades a Vender
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.projectedUnitsToSell}
                 onChange={(e) =>
@@ -149,8 +149,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Precio Venta Unit. (C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.projectedUnitPrice}
                 onChange={(e) =>
@@ -163,8 +162,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Costo Unit. Compra (C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.projectedUnitCost}
                 onChange={(e) =>
@@ -177,8 +175,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 % Ventas Contado
               </label>
-              <input
-                type="number"
+              <NumberInput
                 min={0}
                 max={100}
                 step="any"
@@ -193,8 +190,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Cobros Cartera Ant. (C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.collectionsFromPriorSales}
                 onChange={(e) =>
@@ -209,8 +205,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 % Compras Contado
               </label>
-              <input
-                type="number"
+              <NumberInput
                 min={0}
                 max={100}
                 step="any"
@@ -225,8 +220,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Inv. Inicial (Unid.)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.initialInventoryUnits}
                 onChange={(e) =>
@@ -239,8 +233,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Inv. Final Deseado (Unid.)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.desiredEndingInventoryUnits}
                 onChange={(e) =>
@@ -255,8 +248,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Pago Proveed. Ant. (C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.paymentsForPriorPurchases}
                 onChange={(e) =>
@@ -271,8 +263,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Gastos Op. Fijos (C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.fixedOperatingExpenses}
                 onChange={(e) =>
@@ -285,8 +276,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 % Gasto Op. Variable
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.variableOpExpensePct}
                 onChange={(e) =>
@@ -299,8 +289,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Depreciación Proy. (C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.nonCashDepreciation}
                 onChange={(e) =>
@@ -313,8 +302,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Inversión CAPEX (C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.capexOutflow}
                 onChange={(e) =>
@@ -327,8 +315,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Intereses Proy. (C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.interestPayment}
                 onChange={(e) =>
@@ -341,8 +328,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Pago Impuestos (C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.taxPayment}
                 onChange={(e) =>
@@ -355,8 +341,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Dividendos Proy. (C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.dividendPayment}
                 onChange={(e) =>
@@ -369,8 +354,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Saldo Inicial Caja (C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.initialCashBalance}
                 onChange={(e) =>
@@ -383,8 +367,7 @@ export const BudgetingPage: React.FC = () => {
               <label className="block font-medium text-slate-600 mb-1">
                 Efectivo Mínimo Req. (C$)
               </label>
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={b.minimumCashRequired}
                 onChange={(e) =>

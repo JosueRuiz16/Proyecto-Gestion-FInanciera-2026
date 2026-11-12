@@ -37,6 +37,7 @@ import {
   exportPersonalBudgetExcel,
   openPersonalBudgetReportPrintView,
 } from '../../core/reports/executiveReportGenerator';
+import { NumberInput } from '../../components/common/NumberInput';
 
 const PIE_COLORS = ['#2563eb', '#0ea5e9', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#f43f5e'];
 
@@ -845,8 +846,7 @@ export const PersonalBudgetPage: React.FC = () => {
               {isViewingOwnBudget && (
                 <div className="flex items-center gap-2 mt-1">
                   <label className="text-[11px] text-slate-300">Meta %:</label>
-                  <input
-                    type="number"
+                  <NumberInput
                     min={0}
                     max={90}
                     value={activeBudgetData.savingsGoalPct}
@@ -1010,8 +1010,7 @@ export const PersonalBudgetPage: React.FC = () => {
                   <div className="grid grid-cols-2 gap-2 items-center">
                     <div>
                       <label className="block font-medium text-slate-600 mb-1">Monto (C$)</label>
-                      <input
-                        type="number"
+                      <NumberInput
                         required
                         min={1}
                         value={amount}

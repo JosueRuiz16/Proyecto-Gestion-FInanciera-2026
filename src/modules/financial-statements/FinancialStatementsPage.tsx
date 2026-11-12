@@ -26,6 +26,7 @@ import {
   openExecutiveReportPrintView,
 } from '../../core/reports/executiveReportGenerator';
 import { resolveEffectiveSubType } from '../../core/finance/statements';
+import { NumberInput } from '../../components/common/NumberInput';
 
 export const FinancialStatementsPage: React.FC = () => {
   const {
@@ -359,8 +360,7 @@ export const FinancialStatementsPage: React.FC = () => {
               />
             </td>
             <td className="px-2 py-1.5 text-right">
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={acc.balances[comparisonPeriod.id] ?? 0}
                 onChange={(e) =>
@@ -370,8 +370,7 @@ export const FinancialStatementsPage: React.FC = () => {
               />
             </td>
             <td className="px-2 py-1.5 text-right">
-              <input
-                type="number"
+              <NumberInput
                 step="any"
                 value={acc.balances[activePeriod.id] ?? 0}
                 onChange={(e) =>
@@ -552,8 +551,7 @@ export const FinancialStatementsPage: React.FC = () => {
             </div>
             <div>
               <label className="block font-bold text-slate-700 mb-1">Tasa IR (%)</label>
-              <input
-                type="number"
+              <NumberInput
                 value={quickTaxRate}
                 onChange={(e) => setQuickTaxRate(Number(e.target.value))}
                 className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
@@ -561,8 +559,7 @@ export const FinancialStatementsPage: React.FC = () => {
             </div>
             <div>
               <label className="block font-bold text-slate-700 mb-1">Precio Venta Unit. (P)</label>
-              <input
-                type="number"
+              <NumberInput
                 value={quickUnitPrice}
                 onChange={(e) => setQuickUnitPrice(Number(e.target.value))}
                 className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
@@ -570,8 +567,7 @@ export const FinancialStatementsPage: React.FC = () => {
             </div>
             <div>
               <label className="block font-bold text-slate-700 mb-1">Costo Var. Unit. (CVu)</label>
-              <input
-                type="number"
+              <NumberInput
                 value={quickUnitVarCost}
                 onChange={(e) => setQuickUnitVarCost(Number(e.target.value))}
                 className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
@@ -590,8 +586,7 @@ export const FinancialStatementsPage: React.FC = () => {
                   <span className="font-bold text-slate-800 truncate block">{row.name}</span>
                 </div>
                 {!quickSingleYear && (
-                  <input
-                    type="number"
+                  <NumberInput
                     value={row.base}
                     onChange={(e) => {
                       const val = Number(e.target.value) || 0;
@@ -603,8 +598,7 @@ export const FinancialStatementsPage: React.FC = () => {
                     className="w-24 text-right border border-slate-300 rounded px-2 py-1 font-mono text-xs"
                   />
                 )}
-                <input
-                  type="number"
+                <NumberInput
                   value={row.active}
                   onChange={(e) => {
                     const val = Number(e.target.value) || 0;
@@ -692,8 +686,7 @@ export const FinancialStatementsPage: React.FC = () => {
             <label className="block text-[11px] font-medium text-slate-500 mb-1">
               Tasa IR (%)
             </label>
-            <input
-              type="number"
+            <NumberInput
               min={0}
               max={100}
               step="any"
@@ -710,8 +703,7 @@ export const FinancialStatementsPage: React.FC = () => {
             <label className="block text-[11px] font-medium text-slate-500 mb-1">
               Acciones Comunes (Nota 34)
             </label>
-            <input
-              type="number"
+            <NumberInput
               min={1}
               value={state.company.sharesOutstanding}
               onChange={(e) =>
@@ -726,8 +718,7 @@ export const FinancialStatementsPage: React.FC = () => {
             <label className="block text-[11px] font-medium text-slate-500 mb-1">
               Precio / Valor Acción (C$)
             </label>
-            <input
-              type="number"
+            <NumberInput
               min={0}
               step="any"
               value={state.company.marketPricePerShare}
@@ -1015,8 +1006,7 @@ export const FinancialStatementsPage: React.FC = () => {
                       (-) Provisión para el Impuesto sobre la Renta (Nota 33 / Editable)
                     </td>
                     <td className="px-2 py-1.5 text-right">
-                      <input
-                        type="number"
+                      <NumberInput
                         step="any"
                         value={comparisonTotals.impuestos}
                         onChange={(e) =>
@@ -1028,8 +1018,7 @@ export const FinancialStatementsPage: React.FC = () => {
                       />
                     </td>
                     <td className="px-2 py-1.5 text-right">
-                      <input
-                        type="number"
+                      <NumberInput
                         step="any"
                         value={activeTotals.impuestos}
                         onChange={(e) =>
@@ -1146,8 +1135,7 @@ export const FinancialStatementsPage: React.FC = () => {
                 <label className="block text-xs font-medium text-slate-600 mb-1">
                   Saldo {comparisonPeriod.name} (C$)
                 </label>
-                <input
-                  type="number"
+                <NumberInput
                   step="any"
                   value={newAmountBase}
                   onChange={(e) => setNewAmountBase(e.target.value)}
@@ -1158,8 +1146,7 @@ export const FinancialStatementsPage: React.FC = () => {
                 <label className="block text-xs font-medium text-slate-600 mb-1">
                   Saldo {activePeriod.name} (C$)
                 </label>
-                <input
-                  type="number"
+                <NumberInput
                   step="any"
                   value={newAmountActive}
                   onChange={(e) => setNewAmountActive(e.target.value)}
