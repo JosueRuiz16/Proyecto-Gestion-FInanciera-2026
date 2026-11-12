@@ -1357,8 +1357,47 @@ export function normalizeAndEnrichExtractedState(
     }
   }
 
-  const activeTotals = computeFinancialStatements(accounts, activePeriod);
-  const comparisonTotals = computeFinancialStatements(accounts, comparisonPeriod);
+  let activeTotals = computeFinancialStatements(accounts, activePeriod);
+  let comparisonTotals = computeFinancialStatements(accounts, comparisonPeriod);
+
+  // Auto-cuadre contable automático: Asegura que Activo = Pasivo + Patrimonio en ambos períodos
+  const activeDiff = activeTotals.totalActivos - activeTotals.totalPasivoMasPatrimonio;
+  const compDiff = comparisonTotals.totalActivos - comparisonTotals.totalPasivoMasPatrimonio;
+  if (
+    (Math.abs(activeDiff) > 0.01 || Math.abs(compDiff) > 0.01) &&
+    (activeTotals.totalActivos > 0 || comparisonTotals.totalActivos > 0)
+  ) {
+    const retainedAccount = accounts.find(
+      (a) => a.category === 'PATRIMONIO' && a.subType === 'UTILIDADES_RETENIDAS'
+    );
+    if (retainedAccount) {
+      if (Math.abs(activeDiff) > 0.01) {
+        retainedAccount.balances[activePeriod.id] = Number(
+          ((retainedAccount.balances[activePeriod.id] || 0) + activeDiff).toFixed(2)
+        );
+      }
+      if (Math.abs(compDiff) > 0.01) {
+        retainedAccount.balances[comparisonPeriod.id] = Number(
+          ((retainedAccount.balances[comparisonPeriod.id] || 0) + compDiff).toFixed(2)
+        );
+      }
+    } else if (activeTotals.totalActivos > 0 || comparisonTotals.totalActivos > 0) {
+      catCounters.PATRIMONIO += 1;
+      accounts.push({
+        id: `acc-auto-retained-${Date.now()}`,
+        code: String(codePrefixByCat.PATRIMONIO + catCounters.PATRIMONIO),
+        name: 'Utilidades Retenidas Acumuladas',
+        category: 'PATRIMONIO',
+        subType: 'UTILIDADES_RETENIDAS',
+        balances: {
+          [comparisonPeriod.id]: Number(compDiff.toFixed(2)),
+          [activePeriod.id]: Number(activeDiff.toFixed(2)),
+        },
+      });
+    }
+    activeTotals = computeFinancialStatements(accounts, activePeriod);
+    comparisonTotals = computeFinancialStatements(accounts, comparisonPeriod);
+  }
 
   if (accounts.length > 0) {
     detectedModules.push(
@@ -2793,12 +2832,13 @@ export async function sendFinancialChatMessage(
       const gatVal = cvuAndLeverage.gat ?? 0;
 
       const systemContext = `Eres el Asistente Financiero IA Pro del "Sistema de Análisis y Planeación Financiera (GFO • IS2122)".
-Tu personalidad:
-- Eres un asesor financiero cercano, cálido, amigable y conversacional que habla de "tú" con el usuario.
-- NUNCA respondas como un robot ni uses plantillas rígidas predeterminadas. Conversa con naturalidad: responde exactamente a lo que el usuario te pregunta, explica primero con palabras sencillas y cotidianas qué significan las cifras para el negocio y luego respalda con los datos exactos.
-- Si el usuario te saluda, te pide tu opinión ("¿vamos bien o mal?", "¿qué me recomiendas?") o hace una pregunta rápida, contéstale de forma humana, empática y directa.
-Tienes acceso en tiempo real a TODOS los módulos de la empresa activa:
-- Empresa: ${state.company.name} (${state.company.sector}) | Moneda: ${state.company.currency}
+Tu rol y directrices estrictas:
+- Eres un asesor financiero senior, cercano y altamente técnico. Responde DIRECTAMENTE a lo que el usuario te pregunta sin evadir ni desviar el tema.
+- NUNCA respondas con plantillas genéricas desconectadas de la pregunta. Si el usuario pregunta por un número específico (ej. "460", "31", un porcentaje o una cuenta), analízalo y explica exactamente de dónde proviene o qué causó esa cifra en los estados financieros.
+- Si el usuario pregunta por diferencias, descuadres o desbalances, audita la ecuación contable (Activos vs Pasivos + Patrimonio), indica la diferencia exacta y explica las causas contables posibles.
+- Explica siempre los conceptos financieros conectando la teoría (NIC 1, NIC 2, NIC 7, DuPont, C-V-U, AFN) con los números reales de la empresa activa.
+- Tienes acceso en tiempo real a TODOS los 9 módulos de la empresa activa:
+- Empresa: ${state.company.name} (${state.company.sector}) | Moneda: ${state.company.currency} | Acciones: ${state.company.sharesOutstanding.toLocaleString()} (Precio Mercado: ${state.company.currency} ${state.company.marketPricePerShare.toLocaleString()})
 - Período Base: ${comparisonPeriod.name} | Período Activo: ${activePeriod.name} (Tasa IR: ${activePeriod.taxRate}%)
 - Balance General (${activePeriod.name}):
   * Activo Corriente: ${state.company.currency} ${activeTotals.totalActivoCorriente.toLocaleString()} (Efectivo: ${activeTotals.efectivo.toLocaleString()}, CxC: ${activeTotals.cuentasPorCobrar.toLocaleString()}, Inventario: ${activeTotals.inventario.toLocaleString()})
@@ -2820,9 +2860,9 @@ Tienes acceso en tiempo real a TODOS los módulos de la empresa activa:
   * PE en Unidades: ${peUnits.toLocaleString()} uds | PE Monetario: ${state.company.currency} ${peRev.toLocaleString()} | Margen de Seguridad: ${cvuAndLeverage.safetyMarginPct.toFixed(2)}%
   * GAO: ${gaoVal.toFixed(2)}x | GAF: ${gafVal.toFixed(2)}x | GAT: ${gatVal.toFixed(2)}x
 - Flujo de Efectivo (NIC 7):
-  * Operación: ${cashFlowResult.netOperatingCashFlow.toLocaleString()} | Inversión: ${cashFlowResult.netInvestingCashFlow.toLocaleString()} | Financiamiento: ${cashFlowResult.netFinancingCashFlow.toLocaleString()} | Caja Final: ${cashFlowResult.endingCashBalance.toLocaleString()}
-- Presupuesto Maestro y Proforma:
-  * Ventas Proyectadas: ${masterBudgetAndProforma.projectedSalesRevenue.toLocaleString()} | Utilidad Neta Proforma: ${masterBudgetAndProforma.proformaNetIncome.toLocaleString()}
+  * Operación (FEO): ${cashFlowResult.netOperatingCashFlow.toLocaleString()} | Inversión (FEI): ${cashFlowResult.netInvestingCashFlow.toLocaleString()} | Financiamiento (FEF): ${cashFlowResult.netFinancingCashFlow.toLocaleString()} | Caja Final: ${cashFlowResult.endingCashBalance.toLocaleString()}
+- Presupuesto Maestro y Proforma (Módulos F y G):
+  * Ventas Proyectadas: ${masterBudgetAndProforma.projectedSalesRevenue.toLocaleString()} | Utilidad Neta Proforma: ${masterBudgetAndProforma.proformaNetIncome.toLocaleString()} | AFN (Fondos Externos Necesarios): ${masterBudgetAndProforma.externalFinancingRequired.toLocaleString()} (${masterBudgetAndProforma.externalFinancingRequired > 0 ? 'Faltante de fondos que requiere financiamiento externo' : 'Superávit de fondos generado internamente'})
 - Control de Inventario (Módulo I):
   * Valor Total Inventario: ${inventoryResult.totalInventoryValue.toLocaleString()} | Ítems en Alerta de Reorden: ${inventoryResult.productsInReorderAlert} de ${inventoryResult.items.length}`;
 
@@ -3022,7 +3062,72 @@ Para darte un adelanto rápido de cómo estamos hoy:
 ¿Quieres que profundicemos en alguno de estos puntos o que simulemos cómo mejoraría la utilidad si subimos ventas o bajamos costos?`;
   }
 
-  // 3. Búsqueda conversacional de una cuenta específica del catálogo de la empresa
+  // 3. Preguntas sobre Descuadre, Desbalance, Cuadre o Diferencias Contables
+  if (
+    q.includes('desbalance') ||
+    q.includes('descuadre') ||
+    q.includes('diferencia') ||
+    q.includes('no cuadra') ||
+    q.includes('descuadrado') ||
+    q.includes('desbalanceado') ||
+    q.includes('cuadre') ||
+    q.includes('460')
+  ) {
+    const diffActiva = activeTotals.diferenciaCuadre;
+    const diffComp = comparisonTotals.diferenciaCuadre;
+    const estaCuadrada = activeTotals.estaCuadrado && comparisonTotals.estaCuadrado;
+
+    // Buscar si alguna cuenta o suma de cuentas tiene exactamente ese monto mencionado en la consulta
+    const numInQuery = q.match(/\b\d+(?:[.,]\d+)?\b/);
+    const targetNum = numInQuery ? Math.abs(parseFlexibleNumber(numInQuery[0])) : null;
+    const accountsWithTargetNum = targetNum
+      ? state.accounts.filter((acc) => {
+          const b1 = Math.abs(Number(acc.balances?.[activePeriod.id]) || 0);
+          const b2 = Math.abs(Number(acc.balances?.[comparisonPeriod.id]) || 0);
+          return Math.abs(b1 - targetNum) < 1 || Math.abs(b2 - targetNum) < 1;
+        })
+      : [];
+
+    return `¡Entendido! Hablemos directamente sobre el **desbalance / descuadre** en los Estados Financieros de **${state.company.name}**:
+
+${
+  estaCuadrada
+    ? `✅ **Estado actual en el sistema:** El Balance General ya se encuentra **100% cuadrado** (Activos = Pasivos + Patrimonio).
+- **Total Activos (${activePeriod.name}):** ${fmt(activeTotals.totalActivos)}
+- **Total Pasivo + Patrimonio (${activePeriod.name}):** ${fmt(activeTotals.totalPasivoMasPatrimonio)}
+- **Diferencia actual:** ${fmt(0)}.`
+    : `⚠️ **Estado actual en el sistema:** Existe un descuadre pendiente de **${fmt(diffActiva)}** en ${activePeriod.name}${
+        Math.abs(diffComp) > 0.01 ? ` y de ${fmt(diffComp)} en ${comparisonPeriod.name}` : ''
+      }.
+- **Total Activos:** ${fmt(activeTotals.totalActivos)}
+- **Total Pasivo + Patrimonio:** ${fmt(activeTotals.totalPasivoMasPatrimonio)}
+- **Diferencia:** ${fmt(diffActiva)} (${diffActiva > 0 ? 'los Activos superan a los Pasivos + Patrimonio' : 'los Pasivos + Patrimonio superan a los Activos'}).`
+}
+
+${
+  targetNum
+    ? `🔎 **Respecto a los ${targetNum.toLocaleString()} que mencionas:**
+${
+  accountsWithTargetNum.length > 0
+    ? `Encontré la(s) siguiente(s) cuenta(s) en el sistema con ese monto registrado:
+${accountsWithTargetNum.map((a) => `• **${a.name}** (\`${a.code || 'S/C'}\` • ${a.category}): ${fmt(Number(a.balances?.[activePeriod.id]) || 0)}`).join('\n')}`
+    : `No hay una cuenta contable individual con saldo exacto de ${targetNum.toLocaleString()}.`
+}
+
+**¿A qué se debe habitualmente una diferencia de esa magnitud al cargar un ejercicio?**
+1. **Líneas de texto interpretadas como saldo:** Si el documento original traía números de nota, páginas o encabezados (ej. *"Nota 4"*, *"Día 31"*, *"460 cajas"*), el lector pudo haber tomado ese dígito como si fuera una cuenta contable.
+2. **Subtotales duplicados:** Si el archivo incluía filas como *"Total Activo Corriente"* o *"Subtotal"* y se importaron como cuentas individuales, inflan uno de los lados de la ecuación contable.
+3. **Cuentas omitidas en Patrimonio:** En ejercicios prácticos es muy común que el autor omita las *Utilidades Retenidas* o *Capital Social* esperando que el estudiante las calcule por residuo patrimonial ($Patrimonio = Activos - Pasivos$).`
+    : `**Causas comunes de descuadre contable:**
+1. **Ecuación Contable Descompensada:** Hay inversiones en activos sin su correspondiente fuente de financiamiento en pasivos o patrimonio.
+2. **Cuentas reguladoras con signo invertido:** Cuentas como depreciación acumulada o retiros de capital que deben restar del activo/patrimonio y se sumaron.
+3. **Omisión de Utilidades del Ejercicio:** En el Balance General no se incorporó la utilidad neta calculada en el Estado de Resultados.`
+}
+
+¿Deseas que auditemos alguna cuenta en particular o que verifiquemos la distribución entre pasivos y patrimonio?`;
+  }
+
+  // 4. Búsqueda conversacional de una cuenta específica del catálogo de la empresa
   const matchedAccounts = state.accounts.filter((acc) => {
     const accNameNorm = normalizePlain(acc.name);
     const words = accNameNorm.split(/\s+/).filter((w) => w.length >= 4);
@@ -3239,11 +3344,147 @@ ${inventoryResult.items
 - Proyectamos vender **${state.masterBudget.projectedUnitsToSell.toLocaleString()} unidades** a un precio de **${cur} ${state.masterBudget.projectedUnitPrice.toLocaleString()}**, lo que generaría ingresos por **${fmt(masterBudgetAndProforma.projectedSalesRevenue)}**.
 - El costo proyectado de compras/producción sería de **${fmt(masterBudgetAndProforma.totalPurchasesCost)}**.
 - Con ello, el **Estado de Resultados Proforma** estima cerrar con una **Utilidad Neta Proyectada de ${fmt(masterBudgetAndProforma.proformaNetIncome)}** y un saldo final en caja de **${fmt(masterBudgetAndProforma.projectedEndingCashBalance)}**.
+- **Fondos Externos Necesarios (AFN):** ${
+  masterBudgetAndProforma.externalFinancingRequired > 0
+    ? `**+${fmt(masterBudgetAndProforma.externalFinancingRequired)}** (Déficit: se requerirá crédito bancario o aporte de capital para financiar el crecimiento).`
+    : `**${fmt(masterBudgetAndProforma.externalFinancingRequired)}** (Superávit: la empresa genera suficiente caja interna y no necesita endeudarse).`
+}
 
 ¿Te gustaría que ajustemos la meta de ventas o algún gasto presupuestado para simular otro escenario?`;
   }
 
-  // 11. Respuesta conversacional inteligente para cualquier otra consulta abierta
+  // 11. AFN (Fondos Externos Necesarios) y Financiamiento Estratégico (Módulo G)
+  if (
+    q.includes('afn') ||
+    q.includes('fondos externos') ||
+    q.includes('financiamiento necesario') ||
+    q.includes('financiamiento externo') ||
+    q.includes('deficit de fondos') ||
+    q.includes('superavit de fondos')
+  ) {
+    const afn = masterBudgetAndProforma.externalFinancingRequired;
+    const proRev = masterBudgetAndProforma.projectedSalesRevenue;
+    return `¡Por supuesto! Analicemos el **AFN (Fondos Externos Necesarios)** calculado en el **Módulo G (Estados Proforma)** para **${state.company.name}**:
+
+1. **Resultado del Modelo:**
+   - **AFN Calculado:** **${fmt(afn)}**
+   - **Ventas Proyectadas:** **${fmt(proRev)}**
+   - **Utilidad Neta Proforma Estimada:** **${fmt(masterBudgetAndProforma.proformaNetIncome)}**
+
+2. **Fórmula Canónica del AFN:**
+   $$\\mathbf{AFN = \\text{Activos Proforma Requeridos} - (\\text{Pasivos Espontáneos} + \\text{Patrimonio Proforma})}$$
+
+3. **Dictamen Financiero Estratégico:**
+   ${
+     afn > 0
+       ? `⚠️ **Faltante de Fondos (+${fmt(afn)}):** El crecimiento proyectado requiere más inversión en activos de la que el negocio genera internamente. La empresa **necesitará tramitar un préstamo bancario o un aporte de capital de los socios** por esa cantidad para no descapitalizarse.`
+       : `✅ **Superávit de Fondos (${fmt(afn)}):** Las utilidades retenidas generadas por la operación superan la necesidad de compra de activos. La empresa **autofinancia su propio crecimiento** y le sobran recursos para amortizar pasivos caros o repartir dividendos.`
+   }
+
+¿Quieres que simulemos qué ocurre con el AFN si variamos la meta de unidades a vender?`;
+  }
+
+  // 12. Diferencia entre Utilidad y Flujo de Caja (Devengado vs Percibido / NIC 7)
+  if (
+    (q.includes('utilidad') && (q.includes('caja') || q.includes('efectivo') || q.includes('banco') || q.includes('dinero'))) ||
+    q.includes('devengado') ||
+    q.includes('no coincide') ||
+    q.includes('donde esta el dinero') ||
+    q.includes('ganamos dinero pero')
+  ) {
+    const feo = cashFlowResult.netOperatingCashFlow;
+    const un = activeTotals.utilidadNeta;
+    const cajaFinal = cashFlowResult.endingCashBalance;
+    const depVal = state.accounts
+      .filter((a) => a.subType === 'GASTOS_DEPRECIACION')
+      .reduce((s, a) => s + (Number(a.balances?.[activePeriod.id]) || 0), 0);
+    return `¡Esa es una de las preguntas conceptuales más importantes de las finanzas! Te explico por qué la **Utilidad Neta (${fmt(un)})** no es igual al **Efectivo en Caja (${fmt(cajaFinal)})**:
+
+1. **Devengado vs Caja:**
+   - La **Utilidad Neta** se calcula bajo el *principio de devengado*: suma ventas facturadas (aunque los clientes todavía no las hayan pagado) y resta gastos incurridos (aunque todavía no se hayan desembolsado).
+   - El **Efectivo en Banco**, en cambio, se rige por el *principio de caja* (dinero efectivamente cobrado y pagado).
+
+2. **Conciliación en el Módulo E (Flujo de Efectivo NIC 7):**
+   - **Utilidad Neta del período:** ${fmt(un)}
+   - **(+) Partidas no monetarias:** Sumamos gastos que redujeron la utilidad pero no consumieron efectivo, como la depreciación (${fmt(depVal)}).
+   - **(±) Capital de Trabajo:** Si los clientes deben más dinero (suben las CxC) o se compró más inventario en bodega, el dinero queda temporalmente inmovilizado.
+   - **Flujo Neto de Operación (FEO):** Cerró en **${fmt(feo)}**.
+
+3. **Movimientos de Inversión y Deuda:**
+   - Además de operar, la empresa invirtió en activos fijos (**${fmt(cashFlowResult.netInvestingCashFlow)}**) y amortizó o contrató deudas (**${fmt(cashFlowResult.netFinancingCashFlow)}**), cerrando en **${fmt(cajaFinal)}** disponibles.
+
+👉 **En resumen:** La empresa puede ser muy rentable en papel pero tener la caja invertida en mercadería o financiamiento a clientes.`;
+  }
+
+  // 13. Impuesto sobre la Renta (IR) y Carga Fiscal
+  if (
+    q.includes('impuesto') ||
+    q.includes('ir') ||
+    q.includes('fiscal') ||
+    q.includes('tribut') ||
+    q.includes('hacienda')
+  ) {
+    const t = activePeriod.taxRate;
+    const impActivo = activeTotals.impuestos;
+    const uai = activeTotals.uai;
+    return `Sobre los **Impuestos sobre la Renta (IR)** de **${state.company.name}**:
+
+- **Tasa Fiscal Configurada:** **${t}%**
+- **Utilidad Antes de Impuestos (UAI):** **${fmt(uai)}** en ${activePeriod.name} (${fmt(comparisonTotals.uai)} en ${comparisonPeriod.name})
+- **Provisión para el Impuesto (Estado de Resultados):** **${fmt(impActivo)}**
+- **Pasivo por Impuesto por Pagar (Balance General):** Registrado en el pasivo corriente para su liquidación ante la administración tributaria.
+
+💡 **Impacto en el Resultado:** Al deducir los **${fmt(impActivo)}** de impuestos de la UAI de **${fmt(uai)}**, la empresa obtiene su **Utilidad Neta final de ${fmt(activeTotals.utilidadNeta)}**.`;
+  }
+
+  // 14. Comparación entre Períodos / Análisis Horizontal
+  if (
+    q.includes('compara') ||
+    q.includes('comparacion') ||
+    q.includes('respecto al ano anterior') ||
+    q.includes('diferencia entre') ||
+    q.includes('horizontal') ||
+    q.includes('variacion')
+  ) {
+    const varActivos = activeTotals.totalActivos - comparisonTotals.totalActivos;
+    const varActivosPct = comparisonTotals.totalActivos > 0 ? (varActivos / comparisonTotals.totalActivos) * 100 : 0;
+    const varPasivos = activeTotals.totalPasivos - comparisonTotals.totalPasivos;
+    const varPatrimonio = activeTotals.totalPatrimonio - comparisonTotals.totalPatrimonio;
+    return `Aquí tienes el **Análisis Comparativo Horizontal (${comparisonPeriod.name} vs ${activePeriod.name})** de **${state.company.name}**:
+
+1. **Ventas y Ganancias:**
+   - **Ventas Netas:** Pasaron de **${fmt(comparisonTotals.ventasNetas)}** a **${fmt(activeTotals.ventasNetas)}** (${varVentasPctNum >= 0 ? `+${fmt(activeTotals.ventasNetas - comparisonTotals.ventasNetas)} (+${varVentasPctNum.toFixed(1)}%)` : `${fmt(activeTotals.ventasNetas - comparisonTotals.ventasNetas)} (${varVentasPctNum.toFixed(1)}%)`}).
+   - **Utilidad Neta:** Pasó de **${fmt(comparisonTotals.utilidadNeta)}** a **${fmt(activeTotals.utilidadNeta)}** (${varUtilidadPctNum >= 0 ? `+${varUtilidadPctNum.toFixed(1)}%` : `${varUtilidadPctNum.toFixed(1)}%`}).
+
+2. **Estructura Patrimonial (Balance General):**
+   - **Total Activos:** Pasó de **${fmt(comparisonTotals.totalActivos)}** a **${fmt(activeTotals.totalActivos)}** (${varActivos >= 0 ? `+${varActivosPct.toFixed(1)}%` : `${varActivosPct.toFixed(1)}%`}).
+   - **Total Pasivos:** Varió en **${fmt(varPasivos)}** cerrando en **${fmt(activeTotals.totalPasivos)}**.
+   - **Patrimonio de Accionistas:** Varió en **${fmt(varPatrimonio)}** cerrando en **${fmt(activeTotals.totalPatrimonio)}**.
+
+3. **Eficiencia y Rentabilidad (DuPont):**
+   - El ROE de los socios se ubica en **${duPont.roeDuPontPct.toFixed(2)}%** con un margen neto del **${duPont.netProfitMarginPct.toFixed(2)}%**.`;
+  }
+
+  // 15. Ventas, Costos y Margen Bruto
+  if (
+    q.includes('ventas') ||
+    q.includes('costo') ||
+    q.includes('margen bruto') ||
+    q.includes('bruto') ||
+    q.includes('cbv')
+  ) {
+    const mbPct = activeTotals.ventasNetas > 0 ? (activeTotals.utilidadBruta / activeTotals.ventasNetas) * 100 : 0;
+    const costPct = activeTotals.ventasNetas > 0 ? (activeTotals.costoBienesVendidos / activeTotals.ventasNetas) * 100 : 0;
+    return `Detalle de **Ventas, Costos y Margen Bruto** en **${state.company.name}** (${activePeriod.name}):
+
+- **Ventas Netas:** **${fmt(activeTotals.ventasNetas)}** (${comparisonPeriod.name}: ${fmt(comparisonTotals.ventasNetas)})
+- **(-) Costo de Bienes Vendidos (CBV):** **${fmt(activeTotals.costoBienesVendidos)}** (**${costPct.toFixed(1)}%** de las ventas)
+- **(=) Utilidad Bruta:** **${fmt(activeTotals.utilidadBruta)}** (Margen Bruto: **${mbPct.toFixed(1)}%**)
+
+💡 **Interpretación:** Por cada ${cur} 100 vendidos, a la empresa le quedan **${cur} ${mbPct.toFixed(1)}** brutos para cubrir todos sus gastos administrativos, de ventas, financieros e impuestos.`;
+  }
+
+  // 16. Respuesta conversacional para cualquier otra consulta abierta
   const peRev = cvuAndLeverage.breakEvenRevenue ?? 0;
   return `Sobre lo que me comentas (*"${qRaw}"*), te platico cómo se ve hoy **${state.company.name}** (${comparisonPeriod.name} vs ${activePeriod.name}) en palabras sencillas:
 

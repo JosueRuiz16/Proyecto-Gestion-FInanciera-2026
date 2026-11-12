@@ -70,20 +70,13 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Imagen del equipo en el espacio central: más compacta en móvil y con bordes difuminados/degradados */}
-          <div className="relative z-10 w-full max-w-[270px] sm:max-w-sm lg:max-w-lg mx-auto my-auto">
-            <div className="relative rounded-3xl overflow-hidden shadow-xl">
+          {/* Ilustración financiera en el espacio central */}
+          <div className="relative z-10 w-full max-w-[280px] sm:max-w-md lg:max-w-lg mx-auto my-auto">
+            <div className="relative rounded-3xl overflow-hidden shadow-2xl border border-white/20 dark:border-emerald-500/30">
               <img
-                src={`${import.meta.env.BASE_URL}avatars/team-login.jpg`}
-                alt="Equipo de desarrollo GFO IS2122"
-                style={{
-                  objectPosition: 'center 48%',
-                  WebkitMaskImage:
-                    'radial-gradient(ellipse 92% 90% at 50% 50%, #000 62%, rgba(0,0,0,0.45) 84%, transparent 100%)',
-                  maskImage:
-                    'radial-gradient(ellipse 92% 90% at 50% 50%, #000 62%, rgba(0,0,0,0.45) 84%, transparent 100%)',
-                }}
-                className="w-full h-44 sm:h-64 lg:h-80 object-cover rounded-3xl transition-all"
+                src={`${import.meta.env.BASE_URL}avatars/financial-login.png`}
+                alt="Gestión y Análisis Financiero"
+                className="w-full h-52 sm:h-72 lg:h-80 object-cover object-center rounded-3xl transition-all"
               />
             </div>
           </div>

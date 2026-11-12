@@ -1,0 +1,198 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R 5 0 R 7 0 R] /Count 3 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 9 0 R /F2 10 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 5428 >>
+stream
+0.94 0.97 1.00 rg 0.20 0.40 0.90 RG 45.0 740.0 522.0 50.0 re B
+BT /F2 8 Tf 0.10 0.30 0.80 rg 55.0 774.0 Td (GFO - IS2122 | INGENIERIA EN SISTEMAS) Tj ET
+BT /F2 15 Tf 0.05 0.10 0.20 rg 55.0 758.0 Td (Guia Maestra de Defensa y Arquitectura Financiera) Tj ET
+BT /F1 9 Tf 0.30 0.40 0.50 rg 55.0 745.0 Td (Ecosistema Reactivo de Analisis, Planeacion y Decision Financiera \(Modulos A al I\)) Tj ET
+0.95 0.97 0.99 rg 0.85 0.90 0.95 RG 45.0 696.0 522.0 22.0 re B
+4 w 0.15 0.40 0.90 RG 45.0 696.0 m 45.0 718.0 l S
+BT /F2 11 Tf 0.10 0.20 0.60 rg 55.0 702.0 Td (1. Vision Global: Que es el Sistema y como opera?) Tj ET
+BT /F1 9.5 Tf 0.15 0.20 0.25 rg 45.0 686.0 Td (El software no es una simple hoja de calculo ni una base de datos estatica: es un Ecosistema) Tj ET
+BT /F1 9.5 Tf 0.15 0.20 0.25 rg 45.0 673.0 Td (Financiero Integral en Cascada \(Modulos A al I\). Cada modulo cumple una funcion canonica de la) Tj ET
+BT /F1 9.5 Tf 0.15 0.20 0.25 rg 45.0 660.0 Td (administracion financiera moderna bajo principios internacionales \(NIC 1, NIC 2, NIC 7 y NIIF\),) Tj ET
+BT /F1 9.5 Tf 0.15 0.20 0.25 rg 45.0 647.0 Td (y todos los datos fluyen de forma continua y automatizada en memoria reactiva sin necesidad de) Tj ET
+BT /F1 9.5 Tf 0.15 0.20 0.25 rg 45.0 634.0 Td (sincronizaciones manuales.) Tj ET
+0.95 0.97 1.00 rg 0.85 0.90 0.90 RG 45.0 531.0 522.0 94.0 re B
+4 w 0.20 0.40 0.90 RG 45.0 531.0 m 45.0 625.0 l S
+BT /F2 9.5 Tf 0.05 0.30 0.20 rg 55.0 615.0 Td (ARQUITECTURA DE FLUJO EN CASCADA \(A -> I\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 601.0 Td ([1. Entrada y Nucleo Contable] -> Modulo A \(Balance General y Resultados Comparativo\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 588.0 Td (  |--> [2. Diagnostico Financiero] -> Modulo B \(Vertical, Horizontal, 14 Ratios, DuPont\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 575.0 Td (  |--> [3. Estructura de Costos]  -> Modulo C \(Punto de Equilibrio C-V-U\) y Modulo D \(GAO, GAF, GAT\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 562.0 Td (  |--> [4. Planeacion y Liquidez] -> Modulo E \(Flujo NIC 7\), Modulo F \(Presupuesto\) y Modulo G \(Proforma AFN\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 549.0 Td (  +--> [5. Operaciones y Control] -> Modulo I \(Inventarios NIC 2\) <---> \(Sincroniza Cuenta 1107 en Modulo A\)) Tj ET
+0.95 0.97 0.99 rg 0.85 0.90 0.95 RG 45.0 502.0 522.0 22.0 re B
+4 w 0.15 0.40 0.90 RG 45.0 502.0 m 45.0 524.0 l S
+BT /F2 11 Tf 0.10 0.20 0.60 rg 55.0 508.0 Td (2. Mapa de Conexion: De donde salen y a donde van los datos?) Tj ET
+0.90 0.93 0.98 rg 0.80 0.85 0.90 RG 45.0 488.0 522.0 22.0 re B
+BT /F2 8.5 Tf 0.05 0.20 0.50 rg 50.0 494.0 Td (Modulo) Tj ET
+BT /F2 8.5 Tf 0.05 0.20 0.50 rg 175.0 494.0 Td (Origen de Datos) Tj ET
+BT /F2 8.5 Tf 0.05 0.20 0.50 rg 360.0 494.0 Td (Destino e Impacto) Tj ET
+0.98 0.99 1.00 rg 0.80 0.85 0.90 RG 45.0 466.0 522.0 22.0 re B
+BT /F2 8.5 Tf 0.10 0.15 0.20 rg 50.0 472.0 Td (Modulo A: Estados) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 175.0 472.0 Td (Documento subido \(PDF, Excel, CSV\) o saldo) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 360.0 472.0 Td (Alimenta el corazon: B, C, D, E, F y G) Tj ET
+0.98 0.99 1.00 rg 0.80 0.85 0.90 RG 45.0 444.0 522.0 22.0 re B
+BT /F2 8.5 Tf 0.10 0.15 0.20 rg 50.0 450.0 Td (Modulo B: Diagnostico) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 175.0 450.0 Td (Cat\341logo y totales consolidados de A) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 360.0 450.0 Td (Genera dictamen y ratios de viabilidad a G) Tj ET
+0.98 0.99 1.00 rg 0.80 0.85 0.90 RG 45.0 422.0 522.0 22.0 re B
+BT /F2 8.5 Tf 0.10 0.15 0.20 rg 50.0 428.0 Td (Modulo C: Equilibrio) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 175.0 428.0 Td (Ventas, Costos y Gastos Fijos de A) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 360.0 428.0 Td (Define el piso minimo para metas de F y G) Tj ET
+0.98 0.99 1.00 rg 0.80 0.85 0.90 RG 45.0 400.0 522.0 22.0 re B
+BT /F2 8.5 Tf 0.10 0.15 0.20 rg 50.0 406.0 Td (Modulo D: Apalancamiento) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 175.0 406.0 Td (UAII, Gastos Financieros y CF de A y C) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 360.0 406.0 Td (Mide el riesgo y volatilidad del Proforma) Tj ET
+0.98 0.99 1.00 rg 0.80 0.85 0.90 RG 45.0 378.0 522.0 22.0 re B
+BT /F2 8.5 Tf 0.10 0.15 0.20 rg 50.0 384.0 Td (Modulo E: Flujo NIC 7) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 175.0 384.0 Td (Utilidad Neta de A, Depreciacion y Capital) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 360.0 384.0 Td (Audita si la caja de A es real o por deuda) Tj ET
+0.98 0.99 1.00 rg 0.80 0.85 0.90 RG 45.0 356.0 522.0 22.0 re B
+BT /F2 8.5 Tf 0.10 0.15 0.20 rg 50.0 362.0 Td (Modulo F: Presupuesto) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 175.0 362.0 Td (Cierre de ventas, inventario y metas anual) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 360.0 362.0 Td (Crea las cedulas base para el Proforma G) Tj ET
+0.98 0.99 1.00 rg 0.80 0.85 0.90 RG 45.0 334.0 522.0 22.0 re B
+BT /F2 8.5 Tf 0.10 0.15 0.20 rg 50.0 340.0 Td (Modulo G: Proforma AFN) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 175.0 340.0 Td (Datos de A combinados con Presupuesto F) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 360.0 340.0 Td (Calcula la necesidad de credito bancario) Tj ET
+0.98 0.99 1.00 rg 0.80 0.85 0.90 RG 45.0 312.0 522.0 22.0 re B
+BT /F2 8.5 Tf 0.10 0.15 0.20 rg 50.0 318.0 Td (Modulo I: Inventarios) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 175.0 318.0 Td (Entradas, salidas y costos por SKU) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 360.0 318.0 Td (Sincroniza directamente con la Cuenta 1107 en A) Tj ET
+
+endstream
+endobj
+5 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 6 0 R /Resources << /Font << /F1 9 0 R /F2 10 0 R >> >> >>
+endobj
+6 0 obj
+<< /Length 4200 >>
+stream
+0.95 0.97 0.99 rg 0.85 0.90 0.95 RG 45.0 721.0 522.0 22.0 re B
+4 w 0.15 0.40 0.90 RG 45.0 721.0 m 45.0 743.0 l S
+BT /F2 11 Tf 0.10 0.20 0.60 rg 55.0 727.0 Td (3. Foco Especial: MODULO G - Estados Financieros Proforma y el AFN) Tj ET
+BT /F1 9.5 Tf 0.15 0.20 0.25 rg 45.0 711.0 Td (El Modulo G es el instrumento de planeacion financiera estrategica. Responde la pregunta) Tj ET
+BT /F1 9.5 Tf 0.15 0.20 0.25 rg 45.0 698.0 Td (critica del Director Financiero \(CFO\): 'Si planeamos incrementar las ventas un X% el proximo) Tj ET
+BT /F1 9.5 Tf 0.15 0.20 0.25 rg 45.0 685.0 Td (ano, cuanto dinero adicional necesitaremos conseguir de bancos o socios para financiar el) Tj ET
+BT /F1 9.5 Tf 0.15 0.20 0.25 rg 45.0 672.0 Td (crecimiento sin caer en insolvencia?') Tj ET
+0.97 0.98 0.99 rg 0.85 0.90 0.90 RG 45.0 569.0 522.0 94.0 re B
+4 w 0.10 0.60 0.30 RG 45.0 569.0 m 45.0 663.0 l S
+BT /F2 9.5 Tf 0.05 0.30 0.20 rg 55.0 653.0 Td (MECANICA DE CALCULO DEL ESTADO PROFORMA) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 639.0 Td (1. Ventas Proyectadas = Ventas Base * \(1 + g\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 626.0 Td (2. Costo de Ventas Proyectado = Ventas Proyectadas * \(Costo Base / Ventas Base\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 613.0 Td (3. Gastos Operativos Proforma = Gastos Fijos + Gastos Variables Proyectados) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 600.0 Td (4. Utilidad Neta Proforma = \(UAII Proforma - Gastos Financieros\) * \(1 - Tasa Fiscal\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 587.0 Td (5. Utilidades Retenidas Incrementadas = Utilidad Neta Proforma - Dividendos Proyectados) Tj ET
+0.99 0.98 0.95 rg 0.85 0.90 0.90 RG 45.0 455.0 522.0 108.0 re B
+4 w 0.80 0.40 0.10 RG 45.0 455.0 m 45.0 563.0 l S
+BT /F2 9.5 Tf 0.05 0.30 0.20 rg 55.0 553.0 Td (FORMULA Y DECISION ESTRATEGICA DEL AFN \(FONDOS EXTERNOS NECESARIOS\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 539.0 Td (AFN = Total Activos Proforma - \(Total Pasivos Proforma + Total Patrimonio Proforma\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 526.0 Td (--------------------------------------------------------------------------------) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 513.0 Td (* Si AFN > 0 \(Faltante de Fondos\): El crecimiento supera la generacion de utilidades internas.) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 500.0 Td (  Decision: Tramitar credito bancario LP o emision de acciones para no quebrar.) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 487.0 Td (* Si AFN < 0 \(Superavit de Fondos\): La empresa genera mas caja de la necesaria para crecer.) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 474.0 Td (  Decision: Amortizar deuda cara, invertir en titulos o repartir dividendos a los socios.) Tj ET
+0.95 0.97 0.99 rg 0.85 0.90 0.95 RG 45.0 426.0 522.0 22.0 re B
+4 w 0.15 0.40 0.90 RG 45.0 426.0 m 45.0 448.0 l S
+BT /F2 11 Tf 0.10 0.20 0.60 rg 55.0 432.0 Td (4. Foco Especial: MODULO I - Control y Valuacion de Inventarios \(NIC 2\)) Tj ET
+BT /F1 9.5 Tf 0.15 0.20 0.25 rg 45.0 416.0 Td (El Modulo I administra el activo realizable bajo la Norma Internacional de Contabilidad 2 \(NIC) Tj ET
+BT /F1 9.5 Tf 0.15 0.20 0.25 rg 45.0 403.0 Td (2\). Valua por Costo Promedio Ponderado y se conecta directamente con el Balance General.) Tj ET
+0.96 0.98 0.96 rg 0.85 0.90 0.90 RG 45.0 300.0 522.0 94.0 re B
+4 w 0.10 0.50 0.40 RG 45.0 300.0 m 45.0 394.0 l S
+BT /F2 9.5 Tf 0.05 0.30 0.20 rg 55.0 384.0 Td (CONEXION Y METRICAS CANONICAS DE INVENTARIOS) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 370.0 Td (1. Conexion Directa: Valor Total = Suma\(Stock Final_i * Costo Unitario_i\) -> Cuenta 1107 en Modulo A) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 357.0 Td (2. Kardex Fisico: Stock Final = Stock Inicial + Entradas \(Compras\) - Salidas \(Ventas\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 344.0 Td (3. Rotacion Anual: Rotacion = Costo de Ventas \(Modulo A\) / Inventario Promedio \(Modulo I\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 331.0 Td (4. Dias de Inventario \(DVI\): Dias = 365 / Rotacion \(Permanencia promedio en bodega\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 318.0 Td (5. Alertas: Stock Final < Stock Minimo \(Alerta Roja Reposicion\) | > 2.5*Min \(Sobreinventario\)) Tj ET
+
+endstream
+endobj
+7 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 8 0 R /Resources << /Font << /F1 9 0 R /F2 10 0 R >> >> >>
+endobj
+8 0 obj
+<< /Length 4321 >>
+stream
+0.95 0.97 0.99 rg 0.85 0.90 0.95 RG 45.0 721.0 522.0 22.0 re B
+4 w 0.15 0.40 0.90 RG 45.0 721.0 m 45.0 743.0 l S
+BT /F2 11 Tf 0.10 0.20 0.60 rg 55.0 727.0 Td (5. Guion Verbal Paso a Paso para la Exposicion ante el Profesor) Tj ET
+0.98 0.99 1.00 rg 0.85 0.90 0.90 RG 45.0 649.0 522.0 66.0 re B
+4 w 0.20 0.40 0.90 RG 45.0 649.0 m 45.0 715.0 l S
+BT /F2 9.5 Tf 0.05 0.30 0.20 rg 55.0 705.0 Td (PASO 1: APERTURA Y ARQUITECTURA \(30 SEGUNDOS\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 691.0 Td ('Profesor, nuestro sistema no es una planilla aislada; es un software web de Gestion Financiera) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 678.0 Td (estructurado en 9 modulos en cascada bajo normas NIC y NIIF. La ventaja principal es que no maneja) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 665.0 Td (celdas estaticas: cualquier cambio en el Balance detona un recalculacion reactiva en todos los modulos.') Tj ET
+0.98 0.99 1.00 rg 0.85 0.90 0.90 RG 45.0 577.0 522.0 66.0 re B
+4 w 0.20 0.40 0.90 RG 45.0 577.0 m 45.0 643.0 l S
+BT /F2 9.5 Tf 0.05 0.30 0.20 rg 55.0 633.0 Td (PASO 2: EL NUCLEO CONTABLE \(MODULO A\) Y DIAGNOSTICO \(B, C, D\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 619.0 Td ('En el Modulo A cargamos los Estados Financieros Comparativos y el sistema valida Activo = Pasivo +) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 606.0 Td (Patrimonio. De aqui alimentamos el Modulo B con 14 ratios y DuPont \(Margen * Rotacion * Apalancamiento\),) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 593.0 Td (y los Modulos C y D calculando el Punto de Equilibrio y la sensibilidad operativa con GAO, GAF y GAT.') Tj ET
+0.98 0.99 1.00 rg 0.85 0.90 0.90 RG 45.0 491.0 522.0 80.0 re B
+4 w 0.20 0.40 0.90 RG 45.0 491.0 m 45.0 571.0 l S
+BT /F2 9.5 Tf 0.05 0.30 0.20 rg 55.0 561.0 Td (PASO 3: INVENTARIOS \(MODULO I\) Y PROFORMA \(MODULOS E, F, G\)) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 547.0 Td ('El Modulo I gestiona las existencias fisicas bajo NIC 2 y sincroniza directamente con la cuenta 1107) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 534.0 Td (de Inventarios del Balance. Finalmente, los Modulos E, F y G cierran el ciclo: el Modulo E audita la caja) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 521.0 Td (real por NIC 7, el Modulo F proyecta el Presupuesto y el Modulo G calcula el AFN para saber si el) Tj ET
+BT /F1 8.5 Tf 0.10 0.20 0.30 rg 55.0 508.0 Td (crecimiento comercial requiere deuda bancaria o se autofinancia.') Tj ET
+0.95 0.97 0.99 rg 0.85 0.90 0.95 RG 45.0 462.0 522.0 22.0 re B
+4 w 0.15 0.40 0.90 RG 45.0 462.0 m 45.0 484.0 l S
+BT /F2 11 Tf 0.10 0.20 0.60 rg 55.0 468.0 Td (6. Respuestas a Preguntas Trampa del Profesor) Tj ET
+0.90 0.93 0.98 rg 0.80 0.85 0.90 RG 45.0 448.0 522.0 22.0 re B
+BT /F2 8.5 Tf 0.05 0.20 0.50 rg 50.0 454.0 Td (Pregunta del Profesor) Tj ET
+BT /F2 8.5 Tf 0.05 0.20 0.50 rg 175.0 454.0 Td (Respuesta Tecnica Inmediata) Tj ET
+BT /F2 8.5 Tf 0.05 0.20 0.50 rg 360.0 454.0 Td (Fundamento Contable) Tj ET
+0.98 0.99 1.00 rg 0.80 0.85 0.90 RG 45.0 426.0 522.0 22.0 re B
+BT /F2 8.5 Tf 0.10 0.15 0.20 rg 50.0 432.0 Td (Por que Utilidad != Efectivo) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 175.0 432.0 Td (La utilidad es devengada y la caja es perc) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 360.0 432.0 Td (Modulo E concilia partidas virtuales NIC 7) Tj ET
+0.98 0.99 1.00 rg 0.80 0.85 0.90 RG 45.0 404.0 522.0 22.0 re B
+BT /F2 8.5 Tf 0.10 0.15 0.20 rg 50.0 410.0 Td (Que significa AFN negativo?) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 175.0 410.0 Td (Superavit de fondos internos de la empresa) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 360.0 410.0 Td (No requiere banco; amortiza pasivos o dividendos) Tj ET
+0.98 0.99 1.00 rg 0.80 0.85 0.90 RG 45.0 382.0 522.0 22.0 re B
+BT /F2 8.5 Tf 0.10 0.15 0.20 rg 50.0 388.0 Td (Por que medir dias inventari) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 175.0 388.0 Td (Evita capital ocioso en bodega y sobrecost) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 360.0 388.0 Td (Ciclo de conversion de efectivo optimizado) Tj ET
+0.98 0.99 1.00 rg 0.80 0.85 0.90 RG 45.0 360.0 522.0 22.0 re B
+BT /F2 8.5 Tf 0.10 0.15 0.20 rg 50.0 366.0 Td (Si cambio un saldo en Balanc) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 175.0 366.0 Td (Todo el arbol reactivo recalcula en tiempo) Tj ET
+BT /F1 8.5 Tf 0.10 0.15 0.20 rg 360.0 366.0 Td (Arquitectura reactiva en memoria \(React Context\)) Tj ET
+
+endstream
+endobj
+9 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+10 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+xref
+0 11
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000127 00000 n 
+0000000264 00000 n 
+0000005744 00000 n 
+0000005881 00000 n 
+0000010133 00000 n 
+0000010270 00000 n 
+0000014643 00000 n 
+trailer
+<< /Size 11 /Root 1 0 R >>
+startxref
+14843
+%%EOF

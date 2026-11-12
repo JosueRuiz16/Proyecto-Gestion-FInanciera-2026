@@ -52,11 +52,27 @@ export class FinancialRepository {
             .toUpperCase();
           if (!n || n.startsWith('.')) return false;
           if (
-            /\b(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\b/.test(u) ||
+            /\b(ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|SETIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE)\b/.test(u) ||
             u.includes('ANOS TERMINADOS') ||
+            u.includes('TERMINADOS EL') ||
+            u.includes('TERMINADO EL') ||
             u.includes('CADA ANO') ||
-            u.includes('EXPRESADO EN')
+            u.includes('EXPRESADO EN') ||
+            u.includes('EXPRESADOS EN') ||
+            u.includes('AL CIERRE') ||
+            u.includes('POR EL PERIODO') ||
+            u.includes('PERIODO TERMINADO') ||
+            u.startsWith('AL DE ') ||
+            u.startsWith('POR LOS ') ||
+            u.startsWith('POR EL ') ||
+            u.startsWith('PARA EL ') ||
+            u.startsWith('AL 31')
           ) {
+            return false;
+          }
+          // Descartar si ambos balances son 31 (día de fin de año capturado por error como saldo) y no es cuenta contable real
+          const vals = Object.values(acc.balances || {}).map((v) => Number(v));
+          if (vals.length >= 2 && vals.every((v) => v === 31) && !u.includes('BANCO') && !u.includes('CAJA')) {
             return false;
           }
           if (/\.(MD|MARKDOWN|PDF|XLSX|XLS|CSV|TXT|JSON)\b/.test(u)) return false;
