@@ -40,6 +40,10 @@ import {
   computeInventoryControl,
   computePersonalBudget,
 } from '../../core/finance/complementaryModules';
+import {
+  CashConversionCycleResult,
+  computeCashConversionCycle,
+} from '../../core/finance/cashConversionCycle';
 import { ExtractedFinancialPatch } from '../../core/ai/financialAiService';
 
 interface FinancialContextValue {
@@ -54,6 +58,8 @@ interface FinancialContextValue {
   duPont: DuPontAnalysisResult;
   cvuAndLeverage: CvuAndLeverageResult;
   cashFlowResult: CashFlowStatementResult;
+  cashConversionCycle: CashConversionCycleResult;
+  comparisonCashConversionCycle: CashConversionCycleResult;
   masterBudgetAndProforma: MasterBudgetAndProformaResult;
   personalBudgetResult: PersonalBudgetResult;
   inventoryResult: InventorySummaryResult;
@@ -198,6 +204,16 @@ export const FinancialProvider: React.FC<{
         state.cashFlowInitialBalance
       ),
     [state.cashFlowEntries, state.cashFlowInitialBalance]
+  );
+
+  const cashConversionCycle = useMemo(
+    () => computeCashConversionCycle(activeTotals),
+    [activeTotals]
+  );
+
+  const comparisonCashConversionCycle = useMemo(
+    () => computeCashConversionCycle(comparisonTotals),
+    [comparisonTotals]
   );
 
   const masterBudgetAndProforma = useMemo(
@@ -741,6 +757,8 @@ export const FinancialProvider: React.FC<{
         duPont,
         cvuAndLeverage,
         cashFlowResult,
+        cashConversionCycle,
+        comparisonCashConversionCycle,
         masterBudgetAndProforma,
         personalBudgetResult,
         inventoryResult,

@@ -15,6 +15,10 @@ import {
   computeInventoryControl,
   computePersonalBudget,
 } from '../core/finance/complementaryModules';
+import {
+  computeCashConversionCycle,
+  simulateCceSensitivity,
+} from '../core/finance/cashConversionCycle';
 import { extractFinancialDataFromDocument } from '../core/ai/financialAiService';
 
 describe('Motor Financiero GFO IS2122 - Verificación con Estados Auditados Corporación Agrícola, S.A. (2023-2024)', () => {
@@ -195,5 +199,22 @@ describe('Motor Financiero GFO IS2122 - Verificación con Estados Auditados Corp
     for (const acc of res.patch.accounts || []) {
       expect(acc.name).not.toMatch(/[õ¾»ýÞŸ‡‰žœ÷²«Ù]/);
     }
+  });
+
+  it('9. Verifica el Ciclo de Conversión de Efectivo (CCE / CO / PDP) y simulación de liberación de caja', () => {
+    const actTotals = computeFinancialStatements(INITIAL_DEMO_STATE.accounts, INITIAL_DEMO_STATE.periods[1]);
+    const cce = computeCashConversionCycle(actTotals);
+
+    expect(cce.diasInventario).toBeGreaterThan(0);
+    expect(cce.diasCobro).toBeGreaterThan(0);
+    expect(cce.cicloOperativo).toBeCloseTo(cce.diasInventario + cce.diasCobro, 1);
+    expect(cce.diasPago).toBeGreaterThan(0);
+    expect(cce.cicloConversionEfectivo).toBeCloseTo(cce.cicloOperativo - cce.diasPago, 1);
+
+    // Simulación de sensibilidad: reducir inventario en 5 días, cobrar en 5 días menos y extender pago a proveedores en 10 días
+    const sim = simulateCceSensitivity(cce, -5, -5, 10);
+    expect(sim.cceSimulado).toBeLessThan(cce.cicloConversionEfectivo);
+    expect(sim.diasAhorrados).toBeCloseTo(20, 1);
+    expect(sim.efectivoLiberado).toBeGreaterThan(0);
   });
 });

@@ -10,6 +10,7 @@ import { FinancialAnalysisPage } from '../../modules/financial-analysis/Financia
 import { BreakEvenPage } from '../../modules/break-even/BreakEvenPage';
 import { LeveragePage } from '../../modules/leverage/LeveragePage';
 import { CashFlowPage } from '../../modules/cash-flow/CashFlowPage';
+import { CashConversionCyclePage } from '../../modules/cash-conversion-cycle/CashConversionCyclePage';
 import { BudgetingPage } from '../../modules/budgeting/BudgetingPage';
 import { ProformaPage } from '../../modules/proforma/ProformaPage';
 import { PersonalBudgetPage } from '../../modules/personal-budget/PersonalBudgetPage';
@@ -48,6 +49,7 @@ export const AppRouter: React.FC = () => {
               <Route path="/finanzas/punto-equilibrio" element={<BreakEvenPage />} />
               <Route path="/finanzas/apalancamiento" element={<LeveragePage />} />
               <Route path="/finanzas/flujo-efectivo" element={<CashFlowPage />} />
+              <Route path="/finanzas/cce" element={<CashConversionCyclePage />} />
               <Route path="/finanzas/presupuestos" element={<BudgetingPage />} />
               <Route path="/finanzas/proforma" element={<ProformaPage />} />
               <Route path="/personal/presupuesto" element={<PersonalBudgetPage />} />

@@ -16,6 +16,7 @@ import { DuPontAnalysisResult, FinancialRatioResult } from '../finance/analysis'
 import { CvuAndLeverageResult } from '../finance/cvuAndLeverage';
 import { CashFlowStatementResult, MasterBudgetAndProformaResult } from '../finance/planningAndProforma';
 import { InventorySummaryResult } from '../finance/complementaryModules';
+import { CashConversionCycleResult, computeCashConversionCycle } from '../finance/cashConversionCycle';
 
 const GEMINI_API_KEY_STORAGE = 'gfo_gemini_api_key';
 const GEMINI_MODEL_STORAGE = 'gfo_gemini_preferred_model';
@@ -2863,6 +2864,10 @@ Tu rol y directrices estrictas:
   * Operación (FEO): ${cashFlowResult.netOperatingCashFlow.toLocaleString()} | Inversión (FEI): ${cashFlowResult.netInvestingCashFlow.toLocaleString()} | Financiamiento (FEF): ${cashFlowResult.netFinancingCashFlow.toLocaleString()} | Caja Final: ${cashFlowResult.endingCashBalance.toLocaleString()}
 - Presupuesto Maestro y Proforma (Módulos F y G):
   * Ventas Proyectadas: ${masterBudgetAndProforma.projectedSalesRevenue.toLocaleString()} | Utilidad Neta Proforma: ${masterBudgetAndProforma.proformaNetIncome.toLocaleString()} | AFN (Fondos Externos Necesarios): ${masterBudgetAndProforma.externalFinancingRequired.toLocaleString()} (${masterBudgetAndProforma.externalFinancingRequired > 0 ? 'Faltante de fondos que requiere financiamiento externo' : 'Superávit de fondos generado internamente'})
+- Ciclo de Conversión de Efectivo (Módulo K - CCE):
+  * Días Inventario (PCI): ${computeCashConversionCycle(activeTotals).diasInventario} d | Días Cobro (PCC): ${computeCashConversionCycle(activeTotals).diasCobro} d | Ciclo Operativo (CO): ${computeCashConversionCycle(activeTotals).cicloOperativo} d
+  * Días Pago Proveedores (PDP): ${computeCashConversionCycle(activeTotals).diasPago} d | CCE: ${computeCashConversionCycle(activeTotals).cicloConversionEfectivo} días (${computeCashConversionCycle(activeTotals).status})
+  * Recursos de Capital de Trabajo Requeridos: ${state.company.currency} ${computeCashConversionCycle(activeTotals).recursosRequeridos.toLocaleString()}
 - Control de Inventario (Módulo I):
   * Valor Total Inventario: ${inventoryResult.totalInventoryValue.toLocaleString()} | Ítems en Alerta de Reorden: ${inventoryResult.productsInReorderAlert} de ${inventoryResult.items.length}`;
 
@@ -3484,7 +3489,45 @@ ${inventoryResult.items
 💡 **Interpretación:** Por cada ${cur} 100 vendidos, a la empresa le quedan **${cur} ${mbPct.toFixed(1)}** brutos para cubrir todos sus gastos administrativos, de ventas, financieros e impuestos.`;
   }
 
-  // 16. Respuesta conversacional para cualquier otra consulta abierta
+  // 16. Ciclo de Conversión de Efectivo (CCE) y Ciclo Operativo (Módulo K)
+  if (
+    q.includes('cce') ||
+    q.includes('ciclo de conversion') ||
+    q.includes('conversion de efectivo') ||
+    q.includes('ciclo operativo') ||
+    q.includes('ciclo de efectivo') ||
+    q.includes('dias de cobro') ||
+    q.includes('dias de inventario') ||
+    q.includes('dias de pago') ||
+    q.includes('pci') ||
+    q.includes('pcc') ||
+    q.includes('pdp')
+  ) {
+    const cce = computeCashConversionCycle(activeTotals);
+    const cceComp = computeCashConversionCycle(comparisonTotals);
+    return `¡Por supuesto! Analicemos el **Ciclo de Conversión de Efectivo (CCE / Módulo K)** para **${state.company.name}** en **${activePeriod.name}**:
+
+1. **Componentes del Ciclo Operativo (CO):**
+   - **Días de Inventario (PCI):** **${cce.diasInventario} días** (Rotación: ${cce.rotacionInventario}x/año, inventario promedio: ${fmt(cce.inventario)}).
+   - **Días de Cobro (PCC):** **${cce.diasCobro} días** (Rotación: ${cce.rotacionCxC}x/año, cuentas por cobrar: ${fmt(cce.cuentasPorCobrar)}).
+   - **(=) Ciclo Operativo (CO = PCI + PCC):** **${cce.cicloOperativo} días** (tiempo total desde que entra el inventario hasta que se cobra en efectivo).
+
+2. **Días de Pago a Proveedores (PDP):**
+   - **Días de Pago (PDP):** **${cce.diasPago} días** (los proveedores comerciales financian espontáneamente este plazo sin intereses).
+
+3. **Ciclo de Conversión de Efectivo (CCE = CO - PDP):**
+   $$\\mathbf{CCE = ${cce.cicloOperativo} - ${cce.diasPago} = ${cce.cicloConversionEfectivo}\\text{ días}}$$
+   - **Diagnóstico:** **${cce.status}** (${cce.dictamen})
+   - **Capital de Trabajo Inmovilizado en el Ciclo:** **${fmt(cce.recursosRequeridos)}** (a razón de un desembolso diario promedio de ${fmt(cce.gastoDiarioOperativo)}/día).
+
+4. **Comparativa frente a ${comparisonPeriod.name}:**
+   - En ${comparisonPeriod.name} el CCE fue de **${cceComp.cicloConversionEfectivo} días**.
+   - Variación neta: **${(cce.cicloConversionEfectivo - cceComp.cicloConversionEfectivo).toFixed(1)} días** (${cce.cicloConversionEfectivo <= cceComp.cicloConversionEfectivo ? 'Mejora en la agilidad del capital de trabajo' : 'Mayor inmovilización de fondos'}).
+
+💡 **Estrategia del CFO:** Reducir el CCE negociando más plazo con proveedores o cobrando más rápido libera efectivo líquido directamente a la caja de la empresa sin endeudarse.`;
+  }
+
+  // 17. Respuesta conversacional para cualquier otra consulta abierta
   const peRev = cvuAndLeverage.breakEvenRevenue ?? 0;
   return `Sobre lo que me comentas (*"${qRaw}"*), te platico cómo se ve hoy **${state.company.name}** (${comparisonPeriod.name} vs ${activePeriod.name}) en palabras sencillas:
 
