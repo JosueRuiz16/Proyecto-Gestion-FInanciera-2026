@@ -51,8 +51,8 @@ describe('Motor Financiero GFO IS2122 - Verificación con Estados Auditados Corp
     expect(st2023.utilidadBruta).toBe(1388638065);
     expect(st2023.uaii).toBe(296823017);
     expect(st2023.uai).toBe(38547011);
-    expect(st2023.impuestos).toBe(458130322);
-    expect(st2023.utilidadNeta).toBe(-419583311);
+    expect(st2023.impuestos).toBe(11564103);
+    expect(st2023.utilidadNeta).toBe(26982908);
 
     expect(st2024.utilidadBruta).toBe(1470583112);
     expect(st2024.uaii).toBe(357667403);

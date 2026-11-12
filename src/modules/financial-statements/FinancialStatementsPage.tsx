@@ -1014,7 +1014,7 @@ export const FinancialStatementsPage: React.FC = () => {
                             taxAmount: Number(e.target.value),
                           })
                         }
-                        className="w-32 text-right bg-white border border-rose-300 rounded px-2 py-1 text-xs font-semibold text-rose-700 focus:border-rose-500 focus:outline-none"
+                        className="w-32 text-right bg-white border border-slate-300 rounded px-2 py-1 text-xs font-semibold text-slate-800 focus:border-blue-500 focus:outline-none"
                       />
                     </td>
                     <td className="px-2 py-1.5 text-right">
@@ -1026,7 +1026,7 @@ export const FinancialStatementsPage: React.FC = () => {
                             taxAmount: Number(e.target.value),
                           })
                         }
-                        className="w-32 text-right bg-rose-50/40 border border-rose-300 rounded px-2 py-1 text-xs font-bold text-rose-800 focus:border-rose-600 focus:outline-none"
+                        className="w-32 text-right bg-blue-50/50 border border-blue-300 rounded px-2 py-1 text-xs font-bold text-blue-900 focus:border-blue-600 focus:outline-none"
                       />
                     </td>
                     <td></td>

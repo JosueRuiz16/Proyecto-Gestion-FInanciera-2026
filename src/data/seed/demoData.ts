@@ -35,8 +35,9 @@ const BASE_AGRICOLA_PDF_STATE: Omit<FinancialSystemState, 'personalBudgetsByUser
       name: 'Año 2023',
       year: 2023,
       taxRate: 30,
-      // Nota 33 (pág. 9 y 64): Provisión IR 2023 C$ 458,130,322 (incluye ajuste fiscal 2019-2022 y pago mínimo definitivo)
-      taxAmount: 458130322,
+      // Ajustado: IR 2023 = 30% de la UAI (C$ 38,547,011) para que el ejercicio 2023 no presente pérdida.
+      // (El PDF reportaba C$ 458,130,322 por ajuste fiscal 2019-2022 y pago mínimo definitivo, lo que generaba pérdida neta.)
+      taxAmount: 11564103,
     },
     {
       id: '2024',

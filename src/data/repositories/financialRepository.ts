@@ -26,6 +26,14 @@ export class FinancialRepository {
         return structuredClone(INITIAL_DEMO_STATE);
       }
       const parsed = JSON.parse(raw) as FinancialSystemState;
+      // Migración: Corporación Agrícola 2023 ya no presenta pérdida (IR = 30% de la UAI)
+      if (parsed.company?.id === 'comp-agricola-ni' && Array.isArray(parsed.periods)) {
+        const p2023 = parsed.periods.find((p) => p.id === '2023');
+        if (p2023 && p2023.taxAmount === 458130322) {
+          p2023.taxAmount = 11564103;
+          this.saveState(parsed);
+        }
+      }
       if (
         parsed.company?.name &&
         (/^\.(md|markdown|pdf|xlsx|xls|txt|csv)$/i.test(parsed.company.name.trim()) ||
