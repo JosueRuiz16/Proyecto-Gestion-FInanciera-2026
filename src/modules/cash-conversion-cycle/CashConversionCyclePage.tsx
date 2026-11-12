@@ -48,7 +48,7 @@ export const CashConversionCyclePage: React.FC = () => {
             Módulo K • Unidad 2 y 3: Administración del Capital de Trabajo
           </span>
           <h1 className="text-xl font-bold text-slate-900">
-            Ciclo de Conversión de Efectivo (CCE / Cash Conversion Cycle)
+            Ciclo de Conversión de Efectivo (CCE)
           </h1>
           <p className="text-xs text-slate-600">
             Medición integral de la liquidez dinámica: evalúa cuántos días transcurren desde que se
@@ -88,7 +88,7 @@ export const CashConversionCyclePage: React.FC = () => {
               'Días que conceden los proveedores comerciales antes de exigir el desembolso en efectivo.',
           },
           {
-            label: '5. Ciclo de Conversión de Efectivo (CCE / CCC)',
+            label: '5. Ciclo de Conversión de Efectivo (CCE)',
             formula: 'CCE = Ciclo Operativo - Días de Pago = PCI + PCC - PDP',
             meaning:
               'Días netos en que el dinero de la empresa está inmovilizado y debe financiarse con deuda bancaria o capital propio.',

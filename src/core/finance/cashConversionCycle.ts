@@ -40,7 +40,7 @@ export interface CceSimulationResult {
 }
 
 /**
- * Calcula el Ciclo de Conversión de Efectivo (CCE / CCC) a partir de los totales de los estados financieros.
+ * Calcula el Ciclo de Conversión de Efectivo (CCE) a partir de los totales de los estados financieros.
  * Base temporal: año comercial de 360 días (estándar académico NIIF/GFO).
  */
 export function computeCashConversionCycle(
