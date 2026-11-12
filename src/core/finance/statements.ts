@@ -42,6 +42,48 @@ export interface ComputedStatementTotals {
 }
 
 /**
+ * Infiere el subType contable a partir del nombre y categoría de la cuenta
+ * cuando el usuario agrega o renombra una cuenta sin cambiar manualmente el sub-tipo.
+ */
+export function resolveEffectiveSubType(
+  acc: Pick<FinancialAccountItem, 'name' | 'category' | 'subType'>
+): FinancialAccountItem['subType'] {
+  const n = (acc.name || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  if (acc.category === 'ACTIVO_CORRIENTE' && acc.subType === 'OTROS_ACTIVOS_CORRIENTES') {
+    if (n.includes('invent') || n.includes('mercanc') || n.includes('mercader') || n.includes('almac') || n.includes('existencia')) {
+      return 'INVENTARIO';
+    }
+    if (n.includes('cobrar') || n.includes('cliente') || n.includes('deudor')) {
+      return 'CUENTAS_POR_COBRAR';
+    }
+    if (n.includes('efectivo') || n.includes('caja') || n.includes('banco') || n.includes('tesorer')) {
+      return 'EFECTIVO';
+    }
+  }
+
+  if (acc.category === 'GASTO_OPERATIVO' && acc.subType === 'GASTOS_VENTA_ADMIN') {
+    if (n.includes('depreciac') || n.includes('amortizac')) {
+      return 'GASTOS_DEPRECIACION';
+    }
+  }
+
+  if (acc.category === 'PASIVO_CORRIENTE') {
+    if (acc.subType === 'CUENTAS_POR_PAGAR' && (n.includes('prestamo') || n.includes('banc') || n.includes('pagare') || n.includes('corto plazo'))) {
+      return 'DEUDA_CORTO_PLAZO';
+    }
+    if (acc.subType === 'DEUDA_CORTO_PLAZO' && (n.includes('proveedor') || n.includes('cuentas por pagar') || n.includes('acreedor'))) {
+      return 'CUENTAS_POR_PAGAR';
+    }
+  }
+
+  return acc.subType;
+}
+
+/**
  * Calcula todos los subtotales del Balance General y Estado de Resultados para un período.
  * Fórmulas principales:
  * - Utilidad Bruta = Ventas Netas - Costo de Bienes Vendidos
@@ -64,7 +106,7 @@ export function computeFinancialStatements(
 
   const sumBySubType = (sub: FinancialAccountItem['subType']) =>
     accounts
-      .filter((a) => a.subType === sub)
+      .filter((a) => resolveEffectiveSubType(a) === sub)
       .reduce((acc, item) => acc + getVal(item), 0);
 
   // Activos

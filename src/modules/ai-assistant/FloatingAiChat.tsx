@@ -203,7 +203,7 @@ export const FloatingAiChat: React.FC = () => {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.tsv,.txt,.json"
+              accept=".pdf,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.csv,.tsv,.txt,.md,.markdown,.json"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];

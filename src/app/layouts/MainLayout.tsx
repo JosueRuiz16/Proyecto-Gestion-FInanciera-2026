@@ -300,14 +300,6 @@ export const MainLayout: React.FC = () => {
                   <>
                     <AlertTriangle className="w-4 h-4" /> Descuadre C${' '}
                     {activeTotals.diferenciaCuadre.toLocaleString()}
-                    <button
-                      type="button"
-                      onClick={() => autoBalanceSheet()}
-                      className="ml-1 px-2 py-0.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold transition-colors"
-                      title="Cuadrar Balance General automáticamente en 1 clic"
-                    >
-                      Auto-Cuadrar
-                    </button>
                   </>
                 )}
               </div>

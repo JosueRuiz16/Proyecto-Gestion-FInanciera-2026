@@ -9,8 +9,6 @@ import {
   Calculator,
   Printer,
   Download,
-  RefreshCw,
-  Scale,
   Zap,
   EyeOff,
 } from 'lucide-react';
@@ -27,6 +25,7 @@ import {
   exportFinancialCaseExcel,
   openExecutiveReportPrintView,
 } from '../../core/reports/executiveReportGenerator';
+import { resolveEffectiveSubType } from '../../core/finance/statements';
 
 export const FinancialStatementsPage: React.FC = () => {
   const {
@@ -48,9 +47,6 @@ export const FinancialStatementsPage: React.FC = () => {
     removeAccount,
     updateCompanyInfo,
     syncInventoryWithBalanceSheet,
-    autoSyncCascade,
-    setAutoSyncCascade,
-    autoBalanceSheet,
     syncAllModulesFromStatements,
     applyExtractedFinancialData,
     resetDemoData,
@@ -89,19 +85,6 @@ export const FinancialStatementsPage: React.FC = () => {
     { code: '6102', name: 'Gastos de Depreciación', category: 'GASTO_OPERATIVO', subType: 'GASTOS_DEPRECIACION', base: 40000, active: 50000 },
     { code: '7101', name: 'Gastos Financieros (Intereses)', category: 'GASTO_FINANCIERO', subType: 'INTERESES_PAGADOS', base: 30000, active: 40000 },
   ]);
-
-  const handleAutoBalanceSheet = () => {
-    const targetName = autoBalanceSheet();
-    setSyncNotice(`Balance cuadrado automáticamente en "${targetName}" y módulos sincronizados.`);
-    setTimeout(() => setSyncNotice(''), 3500);
-  };
-
-  const handleSyncAllModules = () => {
-    syncAllModulesFromStatements();
-    syncInventoryWithBalanceSheet();
-    setSyncNotice('Todos los módulos (C-V-U, Apalancamiento, Flujo, Proforma e Inventario) fueron sincronizados.');
-    setTimeout(() => setSyncNotice(''), 3500);
-  };
 
   const handleQuickZeroAll = () => {
     setQuickRows((prev) => prev.map((r) => ({ ...r, base: 0, active: 0 })));
@@ -273,23 +256,73 @@ export const FinancialStatementsPage: React.FC = () => {
     GASTO_FINANCIERO: 'INTERESES_PAGADOS',
   };
 
+  const defaultCodePrefixMap: Record<AccountCategory, string> = {
+    ACTIVO_CORRIENTE: '11',
+    ACTIVO_NO_CORRIENTE: '12',
+    PASIVO_CORRIENTE: '21',
+    PASIVO_NO_CORRIENTE: '22',
+    PATRIMONIO: '31',
+    INGRESO_OPERATIVO: '41',
+    COSTO_VENTAS: '51',
+    GASTO_OPERATIVO: '61',
+    GASTO_FINANCIERO: '71',
+  };
+
   const handleCategoryChange = (cat: AccountCategory) => {
     setNewCategory(cat);
-    setNewSubType(defaultSubTypeMap[cat]);
+    const inferred = resolveEffectiveSubType({
+      name: newName,
+      category: cat,
+      subType: defaultSubTypeMap[cat],
+    });
+    setNewSubType(inferred);
+  };
+
+  const handleNewNameChange = (val: string) => {
+    setNewName(val);
+    const inferred = resolveEffectiveSubType({
+      name: val,
+      category: newCategory,
+      subType: defaultSubTypeMap[newCategory],
+    });
+    setNewSubType(inferred);
   };
 
   const handleAddAccount = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCode.trim() || !newName.trim()) return;
+    if (!newName.trim()) return;
+
+    const sameCategoryCount = state.accounts.filter((a) => a.category === newCategory).length + 1;
+    const autoCode = `${defaultCodePrefixMap[newCategory]}${String(sameCategoryCount).padStart(2, '0')}`;
+    const finalCode = newCode.trim() || autoCode;
+
+    // Detectar si es cuenta correctora de activo (ej. Depreciación Acumulada o Incobrables)
+    const normName = newName
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+    const isContraAsset =
+      (newCategory === 'ACTIVO_CORRIENTE' || newCategory === 'ACTIVO_NO_CORRIENTE') &&
+      (normName.includes('depreciacion acumulada') ||
+        normName.includes('amortizacion acumulada') ||
+        normName.includes('incobrable') ||
+        normName.includes('estimacion'));
+
+    const rawBase = Number(newAmountBase) || 0;
+    const rawActive = Number(newAmountActive) || 0;
 
     addAccount({
-      code: newCode.trim(),
+      code: finalCode,
       name: newName.trim(),
       category: newCategory,
-      subType: newSubType,
+      subType: resolveEffectiveSubType({
+        name: newName.trim(),
+        category: newCategory,
+        subType: newSubType,
+      }),
       balances: {
-        [comparisonPeriod.id]: Number(newAmountBase) || 0,
-        [activePeriod.id]: Number(newAmountActive) || 0,
+        [comparisonPeriod.id]: isContraAsset && rawBase > 0 ? -rawBase : rawBase,
+        [activePeriod.id]: isContraAsset && rawActive > 0 ? -rawActive : rawActive,
       },
     });
     setNewCode('');
@@ -393,41 +426,6 @@ export const FinancialStatementsPage: React.FC = () => {
           >
             {showQuickSolver ? <EyeOff className="w-3.5 h-3.5" /> : <Zap className="w-3.5 h-3.5" />}
             <span>{showQuickSolver ? 'Ocultar Ejercicio Rápido' : '⚡ Resolver Ejercicio Rápido'}</span>
-          </button>
-
-          {(!activeTotals.estaCuadrado || !comparisonTotals.estaCuadrado) && (
-            <button
-              type="button"
-              onClick={handleAutoBalanceSheet}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm transition-colors"
-              title="Ajusta automáticamente Utilidades Retenidas / Capital para cuadrar Activo = Pasivo + Patrimonio"
-            >
-              <Scale className="w-3.5 h-3.5" />
-              <span>Auto-Cuadrar Balance</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={handleSyncAllModules}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-colors"
-            title="Sincroniza Punto de Equilibrio, Apalancamiento, Flujo de Efectivo, Presupuesto Maestro e Inventario con estos Estados Financieros"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Sincronizar Módulos C–I</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setAutoSyncCascade(!autoSyncCascade)}
-            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors ${
-              autoSyncCascade
-                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
-                : 'bg-slate-100 text-slate-600 border-slate-300'
-            }`}
-            title="Cuando está activo, cada cambio en cuentas actualiza en tiempo real Punto de Equilibrio, Apalancamiento, Flujo y Proforma"
-          >
-            <span>Cascada Auto: {autoSyncCascade ? 'ON' : 'OFF'}</span>
           </button>
 
           <button
@@ -802,19 +800,10 @@ export const FinancialStatementsPage: React.FC = () => {
                 <CheckCircle2 className="w-3.5 h-3.5" /> Cuadrado
               </span>
             ) : (
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-400/30">
-                  <AlertTriangle className="w-3.5 h-3.5" /> Descuadre:{' '}
-                  {formatCurrency(activeTotals.diferenciaCuadre)}
-                </span>
-                <button
-                  type="button"
-                  onClick={handleAutoBalanceSheet}
-                  className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold shadow-sm transition-colors"
-                >
-                  ⚖️ Auto-Cuadrar
-                </button>
-              </div>
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-400/30">
+                <AlertTriangle className="w-3.5 h-3.5" /> Descuadre:{' '}
+                {formatCurrency(activeTotals.diferenciaCuadre)}
+              </span>
             )}
           </div>
 
@@ -1084,12 +1073,11 @@ export const FinancialStatementsPage: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-medium text-slate-600 mb-1">
-                  Código Contable
+                  Código Contable (Opcional)
                 </label>
                 <input
                   type="text"
-                  required
-                  placeholder="Ej. 1109"
+                  placeholder="Auto (ej. 1105)"
                   value={newCode}
                   onChange={(e) => setNewCode(e.target.value)}
                   className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-xs"
@@ -1150,7 +1138,7 @@ export const FinancialStatementsPage: React.FC = () => {
                   required
                   placeholder="Ej. Inversiones Temporales"
                   value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
+                  onChange={(e) => handleNewNameChange(e.target.value)}
                   className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-xs"
                 />
               </div>

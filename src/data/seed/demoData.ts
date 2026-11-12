@@ -952,6 +952,14 @@ export function createBlankCaseState(
         balances: { '2023': 0, '2024': 0 },
       },
       {
+        id: 'acc-b-602',
+        code: '6102',
+        name: 'Gastos de Depreciación y Amortización',
+        category: 'GASTO_OPERATIVO',
+        subType: 'GASTOS_DEPRECIACION',
+        balances: { '2023': 0, '2024': 0 },
+      },
+      {
         id: 'acc-b-701',
         code: '7101',
         name: 'Gastos Financieros (Intereses)',

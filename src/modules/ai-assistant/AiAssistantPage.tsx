@@ -79,14 +79,11 @@ export const AiAssistantPage: React.FC = () => {
     clearForNewCase,
   } = useFinancialSystem();
 
-  // Configuración de API Key y Modelo Pro
+  // Configuración de API Key
   const [apiKeyInput, setApiKeyInput] = useState<string>(() => getStoredGeminiApiKey());
-  const [preferredModel, setPreferredModelState] = useState<GeminiModelOption>(() =>
-    getPreferredGeminiModel()
-  );
   const [apiKeySavedMsg, setApiKeySavedMsg] = useState<string>('');
   const [isTestingKey, setIsTestingKey] = useState<boolean>(false);
-  const [showKeyConfig, setShowKeyConfig] = useState<boolean>(() => !hasGeminiApiKey());
+  const [showKeyConfig, setShowKeyConfig] = useState<boolean>(false);
 
   // Estado de Lectura de Documentos
   const [inputMode, setInputMode] = useState<'FILE' | 'TEXT'>('FILE');
@@ -127,11 +124,6 @@ export const AiAssistantPage: React.FC = () => {
     } finally {
       setIsTestingKey(false);
     }
-  };
-
-  const handleModelChange = (model: GeminiModelOption) => {
-    setPreferredModelState(model);
-    setPreferredGeminiModel(model);
   };
 
   const handleProcessDocument = async (overrideFile?: File | null, overrideText?: string) => {
@@ -330,36 +322,18 @@ export const AiAssistantPage: React.FC = () => {
                 }`}
               >
                 {geminiActive
-                  ? `✨ Plan Pro Activo (${
-                      preferredModel === 'gemini-2.5-flash'
-                        ? 'Gemini 2.5 Flash'
-                        : 'Gemini 2.5 Pro'
-                    })`
-                  : '⚡ Motor Financiero Híbrido Local Activo'}
+                  ? '✨ Motor IA Gemini 2.5 Activo'
+                  : '⚡ Motor Financiero Exacto Activo'}
               </span>
             </div>
             <p className="text-xs text-slate-600 mt-0.5">
-              Detecta automáticamente PDFs, imágenes (con Ctrl+V), tablas de Excel/CSV o ejercicios
-              en texto y completa todos los módulos del sistema.
+              Detecta automáticamente PDFs, Excel (.xlsx/.xls), imágenes (con Ctrl+V), tablas CSV o
+              ejercicios en texto y adapta las cuentas reales sin inventar datos.
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="hidden sm:flex items-center gap-1.5 bg-white/80 border border-slate-200 rounded-xl px-2.5 py-1">
-            <Cpu className="w-3.5 h-3.5 text-indigo-600" />
-            <span className="text-[11px] font-semibold text-slate-600">Modelo:</span>
-            <select
-              value={preferredModel}
-              onChange={(e) => handleModelChange(e.target.value as GeminiModelOption)}
-              className="text-xs font-bold text-indigo-700 bg-transparent border-none focus:ring-0 py-0.5"
-            >
-              <option value="auto">Auto (Gemini 2.5 Pro → Flash)</option>
-              <option value="gemini-2.5-pro">Gemini 2.5 Pro (Máxima Precisión)</option>
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash (Ultra Rápido)</option>
-            </select>
-          </div>
-
           <button
             type="button"
             onClick={() => setShowKeyConfig((v) => !v)}
@@ -536,7 +510,7 @@ export const AiAssistantPage: React.FC = () => {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.tsv,.txt,.json"
+                  accept=".pdf,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.csv,.tsv,.txt,.md,.markdown,.json"
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
@@ -963,7 +937,7 @@ export const AiAssistantPage: React.FC = () => {
               <input
                 ref={chatFileInputRef}
                 type="file"
-                accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.tsv,.txt,.json"
+                accept=".pdf,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.csv,.tsv,.txt,.md,.markdown,.json"
                 className="hidden"
                 onChange={(e) => {
                   const f = e.target.files?.[0];

@@ -88,20 +88,32 @@ export interface LiveFinancialSnapshot {
   inventoryResult: InventorySummaryResult;
 }
 
+const invalidKeysCache = new Set<string>();
+
 export function getStoredGeminiApiKey(): string {
   const fromStorage =
     typeof window !== 'undefined' ? localStorage.getItem(GEMINI_API_KEY_STORAGE) : null;
   if (fromStorage && fromStorage.trim()) {
-    return fromStorage.trim();
+    const k = fromStorage.trim();
+    if (!invalidKeysCache.has(k)) return k;
   }
   const envKey = (import.meta as unknown as { env?: Record<string, string> }).env
     ?.VITE_GEMINI_API_KEY;
-  return envKey ? envKey.trim() : '';
+  const trimmedEnv = envKey ? envKey.trim() : '';
+  // Ignorar llaves AQ. de desarrollo que no tienen habilitada Vertex AI API en GCP
+  if (trimmedEnv.startsWith('AQ.Ab8RN6IxiTjXC7c')) {
+    return '';
+  }
+  if (trimmedEnv && !invalidKeysCache.has(trimmedEnv)) {
+    return trimmedEnv;
+  }
+  return '';
 }
 
 export function setStoredGeminiApiKey(apiKey: string): void {
   if (typeof window === 'undefined') return;
   const trimmed = apiKey.trim();
+  invalidKeysCache.delete(trimmed);
   if (trimmed) {
     localStorage.setItem(GEMINI_API_KEY_STORAGE, trimmed);
   } else {
@@ -114,11 +126,6 @@ export function hasGeminiApiKey(): boolean {
 }
 
 export function getPreferredGeminiModel(): GeminiModelOption {
-  if (typeof window === 'undefined') return 'auto';
-  const saved = localStorage.getItem(GEMINI_MODEL_STORAGE);
-  if (saved === 'gemini-2.5-pro' || saved === 'gemini-2.5-flash' || saved === 'auto') {
-    return saved;
-  }
   return 'auto';
 }
 
@@ -128,21 +135,18 @@ export function setPreferredGeminiModel(model: GeminiModelOption): void {
 }
 
 /**
- * Invoca Google Gemini priorizando Gemini 2.5 Pro (Plan Pro) y Gemini 2.5 Flash,
- * soportando claves "AIza..." y "AQ...." tanto en Google AI Studio como en Vertex AI Express.
+ * Invoca automáticamente el mejor modelo disponible de Google Gemini (2.5 Flash / 2.5 Pro / 2.0 Flash)
+ * con failover automático y sin necesidad de elegir modelo manualmente.
  */
 async function callGoogleGeminiApi(
   apiKey: string,
-  payload: Record<string, unknown>,
-  preferredModel: GeminiModelOption = getPreferredGeminiModel()
+  payload: Record<string, unknown>
 ): Promise<{ ok: boolean; text: string; modelUsed: string; errorMsg?: string }> {
-  const modelsOrder =
-    preferredModel === 'gemini-2.5-pro'
-      ? ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash']
-      : preferredModel === 'gemini-2.5-flash'
-      ? ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash']
-      : ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+  if (!apiKey || invalidKeysCache.has(apiKey)) {
+    return { ok: false, text: '', modelUsed: '', errorMsg: 'Sin API Key activa' };
+  }
 
+  const modelsOrder = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash'];
   const isAqKey = apiKey.startsWith('AQ.');
 
   const buildEndpoints = (model: string) => {
@@ -165,8 +169,12 @@ async function callGoogleGeminiApi(
   };
 
   let lastError = '';
+  let authFailedCount = 0;
+  let totalAttempts = 0;
+
   for (const model of modelsOrder) {
     for (const ep of buildEndpoints(model)) {
+      totalAttempts++;
       try {
         const res = await fetch(ep.url, {
           method: 'POST',
@@ -174,6 +182,9 @@ async function callGoogleGeminiApi(
           body: JSON.stringify(payload),
         });
         if (!res.ok) {
+          if (res.status === 400 || res.status === 401 || res.status === 403) {
+            authFailedCount++;
+          }
           const errText = await res.text();
           try {
             const errJson = JSON.parse(errText);
@@ -185,7 +196,6 @@ async function callGoogleGeminiApi(
         }
         const data = await res.json();
         const parts = data?.candidates?.[0]?.content?.parts || [];
-        // En modelos Pro con razonamiento (thinking), tomar la parte de texto final no-thought
         const textPart =
           parts.find((p: Record<string, unknown>) => !p.thought && typeof p.text === 'string') ||
           parts[parts.length - 1];
@@ -197,6 +207,10 @@ async function callGoogleGeminiApi(
         lastError = err instanceof Error ? err.message : 'Error de red';
       }
     }
+  }
+
+  if (totalAttempts > 0 && authFailedCount === totalAttempts) {
+    invalidKeysCache.add(apiKey);
   }
 
   return { ok: false, text: '', modelUsed: '', errorMsg: lastError };
@@ -482,28 +496,130 @@ function extractLinesFromPdfContentStream(content: string): string[] {
 }
 
 /**
- * Extrae texto estructurado desde archivos PDF, CSV, TXT, JSON o DOCX.
+ * Extrae filas de texto desde un archivo Excel (.xlsx / .xls) usando SheetJS en el navegador.
+ */
+async function extractTextWithSheetJs(buffer: ArrayBuffer): Promise<string[]> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return [];
+  try {
+    const win = window as unknown as Record<string, unknown>;
+    if (!win.XLSX) {
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('No se pudo cargar SheetJS'));
+        document.head.appendChild(script);
+      });
+    }
+    const XLSX = win.XLSX as {
+      read: (data: Uint8Array, opts: { type: string }) => {
+        SheetNames: string[];
+        Sheets: Record<string, unknown>;
+      };
+      utils: {
+        sheet_to_json: (sheet: unknown, opts: { header: number; defval: string }) => unknown[][];
+      };
+    };
+    if (!XLSX) return [];
+    const wb = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+    const rowsOut: string[] = [];
+    for (const sheetName of wb.SheetNames) {
+      const sheet = wb.Sheets[sheetName];
+      const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      for (const row of matrix) {
+        if (!Array.isArray(row)) continue;
+        const cells = row
+          .map((c) => String(c ?? '').trim())
+          .filter((c) => c.length > 0);
+        if (cells.length > 0) {
+          rowsOut.push(cells.join(' | '));
+        }
+      }
+    }
+    return rowsOut;
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Extrae texto de imágenes (.png, .jpg, .webp) usando OCR (Tesseract.js) cuando no hay API Key externa activa.
+ */
+async function extractTextFromImageWithOcr(file: File): Promise<string[]> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return [];
+  try {
+    const win = window as unknown as Record<string, unknown>;
+    if (!win.Tesseract) {
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error('No se pudo cargar OCR'));
+        document.head.appendChild(script);
+      });
+    }
+    const Tesseract = win.Tesseract as {
+      recognize: (
+        image: File,
+        lang: string
+      ) => Promise<{ data?: { text?: string } }>;
+    };
+    if (!Tesseract) return [];
+    const res = await Tesseract.recognize(file, 'spa+eng');
+    const rawText = res?.data?.text || '';
+    return rawText
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter((l) => l.length > 2);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Extrae texto estructurado desde archivos PDF, Excel (.xlsx/.xls), Imágenes, CSV, TXT o JSON.
  */
 export async function extractReadableTextFromFile(file: File): Promise<string> {
   try {
+    const lowerName = file.name.toLowerCase();
     const buffer = await file.arrayBuffer();
     if (
       file.type.includes('text') ||
       file.type.includes('json') ||
-      file.name.endsWith('.csv') ||
-      file.name.endsWith('.tsv') ||
-      file.name.endsWith('.txt') ||
-      file.name.endsWith('.json')
+      lowerName.endsWith('.md') ||
+      lowerName.endsWith('.markdown') ||
+      lowerName.endsWith('.csv') ||
+      lowerName.endsWith('.tsv') ||
+      lowerName.endsWith('.txt') ||
+      lowerName.endsWith('.json')
     ) {
       return new TextDecoder('utf-8').decode(buffer);
     }
 
-    const cleanFileName = file.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ');
-    const extractedLines: string[] = [cleanFileName];
+    const extractedLines: string[] = [];
 
-    if (file.name.toLowerCase().endsWith('.pdf')) {
+    if (lowerName.endsWith('.xlsx') || lowerName.endsWith('.xls')) {
+      const excelRows = await extractTextWithSheetJs(buffer);
+      if (excelRows.length > 0) {
+        extractedLines.push(...excelRows);
+        return extractedLines.join('\n').slice(0, 140000);
+      }
+      // Si era un .xls basado en tabla HTML/XML
+      const textFallback = new TextDecoder('utf-8').decode(buffer);
+      if (textFallback.includes('<tr') || textFallback.includes('<td')) {
+        const cleanHtml = textFallback
+          .replace(/<\/tr>/gi, '\n')
+          .replace(/<\/t[dh]>/gi, ' | ')
+          .replace(/<[^>]+>/g, ' ')
+          .replace(/&nbsp;/g, ' ');
+        extractedLines.push(cleanHtml);
+        return extractedLines.join('\n').slice(0, 140000);
+      }
+    }
+
+    if (lowerName.endsWith('.pdf')) {
       const pdfJsRows = await extractTextWithPdfJs(buffer);
-      if (pdfJsRows.length >= 3) {
+      if (pdfJsRows.length >= 2) {
         extractedLines.push(...pdfJsRows);
         return extractedLines.join('\n').slice(0, 140000);
       }
@@ -529,6 +645,20 @@ export async function extractReadableTextFromFile(file: File): Promise<string> {
             extractedLines.push(...pdfLines);
           }
         }
+      }
+    }
+
+    if (
+      (file.type.startsWith('image/') ||
+        lowerName.endsWith('.png') ||
+        lowerName.endsWith('.jpg') ||
+        lowerName.endsWith('.jpeg') ||
+        lowerName.endsWith('.webp')) &&
+      !hasGeminiApiKey()
+    ) {
+      const ocrLines = await extractTextFromImageWithOcr(file);
+      if (ocrLines.length > 0) {
+        extractedLines.push(...ocrLines);
       }
     }
 
@@ -568,160 +698,452 @@ const VALID_SUBTYPES: AccountSubType[] = [
   'INTERESES_PAGADOS',
 ];
 
+function stripAccentsUpper(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .trim();
+}
+
+/**
+ * Detecta si una fila es un subtotal calculado o encabezado de sección (para NO agregarla como cuenta duplicada).
+ */
+/**
+ * Detecta líneas de fecha / encabezado / leyenda (ej. "Al 31 de diciembre de cada año",
+ * "Por los años terminados el 31 de diciembre", "Expresado en córdobas") que NUNCA son cuentas contables.
+ */
+export function isDateOrHeaderLine(text: string): boolean {
+  const u = stripAccentsUpper(text);
+  const months =
+    'ENERO|FEBRERO|MARZO|ABRIL|MAYO|JUNIO|JULIO|AGOSTO|SEPTIEMBRE|SETIEMBRE|OCTUBRE|NOVIEMBRE|DICIEMBRE';
+  if (new RegExp(`\\b(${months})\\b`).test(u)) return true;
+  if (/\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b/.test(u)) return true;
+  return (
+    u.includes('ANOS TERMINADOS') ||
+    u.includes('EJERCICIO TERMINADO') ||
+    u.includes('EJERCICIOS TERMINADOS') ||
+    u.includes('CADA ANO') ||
+    u.includes('AL CIERRE DE') ||
+    u.includes('POR EL PERIODO') ||
+    u.includes('PERIODO TERMINADO') ||
+    u.includes('EXPRESADO EN') ||
+    u.includes('EXPRESADOS EN') ||
+    u.includes('CIFRAS EN') ||
+    u.includes('MONTOS EN') ||
+    u.includes('VALORES EN') ||
+    u.includes('EN MILES DE') ||
+    u.includes('EN MILLONES DE') ||
+    /^(AL|POR LOS|POR EL|PARA EL|DEL|AÑO|ANO)\s*(\d{1,4})?\s*$/.test(u) ||
+    /^(ANO|PERIODO|CUENTA|CONCEPTO|RUBRO|NOTA|NOTAS|CODIGO|COD)\b[\s\d]*$/.test(u)
+  );
+}
+
+function isSubtotalOrCalculatedRow(rawName: string): boolean {
+  if (isDateOrHeaderLine(rawName)) return true;
+  const u = stripAccentsUpper(rawName)
+    .replace(/^[(=+\-*#.\d)\s]+/, '')
+    .trim();
+  if (!u || u.length < 2) return true;
+
+  // Descartar nombres de archivos o títulos de documentos/secciones que se hayan colado
+  if (
+    /\.(MD|MARKDOWN|PDF|XLSX|XLS|CSV|TXT|JSON)\b/.test(u) ||
+    u.includes('CASO DE PRUEBA') ||
+    u.startsWith('DATOS GENERALES') ||
+    u.startsWith('INFORMACION GENERAL') ||
+    u.startsWith('BALANCE GENERAL') ||
+    u.startsWith('ESTADO DE SITUACION') ||
+    u.startsWith('ESTADO DE RESULTADO') ||
+    u.startsWith('ESTADOS FINANCIEROS') ||
+    u.startsWith('PUNTO DE EQUILIBRIO') ||
+    u.startsWith('ANALISIS CVU') ||
+    u.startsWith('ANALISIS C V U') ||
+    u.startsWith('APALANCAMIENTO') ||
+    u.startsWith('FLUJO DE EFECTIVO') ||
+    u.startsWith('PRESUPUESTO MAESTRO') ||
+    u.startsWith('CONTROL DE INVENTARIO') ||
+    u.startsWith('MODULO ') ||
+    u.startsWith('SECCION ') ||
+    u.startsWith('EJERCICIO ') ||
+    u.startsWith('ACCIONES EN CIRCULACION') ||
+    u.startsWith('NUMERO DE ACCIONES') ||
+    u.startsWith('PRECIO DE MERCADO') ||
+    u.startsWith('PRECIO POR ACCION') ||
+    u.startsWith('VALOR DE MERCADO POR ACCION') ||
+    u.startsWith('TASA DE IMPUESTO') ||
+    u.startsWith('TASA FISCAL') ||
+    u.startsWith('TASA IR')
+  ) {
+    return true;
+  }
+
+  if (
+    u.startsWith('TOTAL') ||
+    u.startsWith('SUMA ') ||
+    u.startsWith('SUBTOTAL') ||
+    u.includes('TOTAL ACTIVO') ||
+    u.includes('TOTAL DE ACTIVO') ||
+    u.includes('SUMA DEL ACTIVO') ||
+    u.includes('TOTAL PASIVO') ||
+    u.includes('TOTAL DE PASIVO') ||
+    u.includes('SUMA DEL PASIVO') ||
+    u.includes('TOTAL PATRIMONIO') ||
+    u.includes('TOTAL CAPITAL') ||
+    u.includes('PASIVO Y PATRIMONIO') ||
+    u.includes('PASIVO + PATRIMONIO') ||
+    u.includes('PASIVO MAS PATRIMONIO') ||
+    u.includes('PASIVO Y CAPITAL') ||
+    u.includes('PASIVO + CAPITAL') ||
+    u.includes('UTILIDAD BRUTA') ||
+    u.includes('MARGEN BRUTO') ||
+    u.includes('GANANCIA BRUTA') ||
+    u.includes('UTILIDAD OPERATIVA') ||
+    u.includes('UTILIDAD DE OPERACION') ||
+    u.includes('RESULTADO OPERATIVO') ||
+    u.includes('UAII') ||
+    u.includes('EBIT') ||
+    u.includes('UTILIDAD ANTES DE IMPUESTO') ||
+    u.includes('RESULTADO ANTES DE IMPUESTO') ||
+    u.includes('UTILIDAD ANTES DEL IMPUESTO') ||
+    u === 'UAI' ||
+    u === 'EBT' ||
+    u.includes('UTILIDAD NETA') ||
+    u.includes('PERDIDA NETA') ||
+    u.includes('RESULTADO NETO') ||
+    u.includes('GANANCIA NETA') ||
+    u.includes('UTILIDAD PERDIDA NETA')
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
+ * Detecta si una línea corresponde al Impuesto sobre la Renta (IR) del Estado de Resultados
+ * (y NO a "Impuestos por pagar" del Balance ni "Impuestos por recuperar").
+ */
+function isIncomeTaxExpenseRow(rawName: string): boolean {
+  const u = stripAccentsUpper(rawName);
+  if (
+    u.includes('POR PAGAR') ||
+    u.includes('ACUMULAD') ||
+    u.includes('POR RECUPERAR') ||
+    u.includes('ANTICIPAD') ||
+    u.includes('DIFERID') ||
+    u.includes('ACREDITABLE') ||
+    u.includes('RETENCION')
+  ) {
+    return false;
+  }
+  return (
+    u.includes('IMPUESTO SOBRE LA RENTA') ||
+    u.includes('PROVISION PARA IMPUESTO') ||
+    u.includes('PROVISION PARA EL IMPUESTO') ||
+    u.includes('PROVISION IR') ||
+    u.includes('GASTO POR IMPUESTO') ||
+    u.includes('IMPUESTO A LAS GANANCIAS') ||
+    /^IMPUESTOS?\s*(\(\d+%?\))?$/.test(u) ||
+    /^IR\s*(\(\d+%?\))?$/.test(u)
+  );
+}
+
 export function inferCategoryAndSubType(
   name: string,
   rawCat?: string,
-  rawSub?: string
+  rawSub?: string,
+  sectionHint?: AccountCategory | 'ESTADO_RESULTADOS' | null
 ): { category: AccountCategory; subType: AccountSubType } {
-  const upperName = name.toUpperCase();
+  const u = stripAccentsUpper(name);
   const catValid = VALID_CATEGORIES.find((c) => c === rawCat);
   const subValid = VALID_SUBTYPES.find((s) => s === rawSub);
+
+  // 1. Verificar primero Costo de Ventas, Gastos Operativos y Financieros (antes de 'VENTA' para no confundir "Costo de ventas" ni "Gastos de ventas" con Ventas Netas)
+  if (
+    u.includes('COSTO DE VENTA') ||
+    u.includes('COSTOS DE VENTA') ||
+    u.includes('COSTO DE BIENES') ||
+    u.includes('COSTO DE PRODUCCI') ||
+    u.includes('COSTO DE LO VENDIDO') ||
+    u.includes('COSTO DE MERCADER') ||
+    u.includes('COSTO DE MERCANC') ||
+    u === 'COSTO' ||
+    u === 'COSTOS' ||
+    u === 'CBV' ||
+    u === 'CMV'
+  ) {
+    return { category: 'COSTO_VENTAS', subType: 'COSTO_BIENES_VENDIDOS' };
+  }
+
+  // Depreciación acumulada (Balance General) vs Depreciación operativa (Estado de Resultados)
+  if (u.includes('DEPRECIACI') || u.includes('AMORTIZACI')) {
+    if (u.includes('ACUMULAD') || sectionHint === 'ACTIVO_NO_CORRIENTE' || sectionHint === 'ACTIVO_CORRIENTE') {
+      return { category: 'ACTIVO_NO_CORRIENTE', subType: 'ACTIVO_FIJO_NETO' };
+    }
+    return { category: 'GASTO_OPERATIVO', subType: 'GASTOS_DEPRECIACION' };
+  }
+
+  if (
+    u.includes('INTERES') ||
+    u.includes('GASTO FINANCIERO') ||
+    u.includes('GASTOS FINANCIEROS') ||
+    u.includes('COSTO FINANCIERO') ||
+    u.includes('COSTOS FINANCIEROS') ||
+    u.includes('COSTO INTEGRAL DE FINANCIAMIENTO') ||
+    u.includes('COMISIONES BANCARIAS')
+  ) {
+    if (u.includes('POR PAGAR') || u.includes('ACUMULAD')) {
+      return { category: 'PASIVO_CORRIENTE', subType: 'CUENTAS_POR_PAGAR' };
+    }
+    if (u.includes('POR COBRAR')) {
+      return { category: 'ACTIVO_CORRIENTE', subType: 'CUENTAS_POR_COBRAR' };
+    }
+    return { category: 'GASTO_FINANCIERO', subType: 'INTERESES_PAGADOS' };
+  }
+
+  // Pagos anticipados (Activo Corriente) y Gastos acumulados por pagar (Pasivo Corriente) antes de Gasto Operativo general
+  if (
+    u.includes('PAGADO POR ANTICIPADO') ||
+    u.includes('PAGADOS POR ANTICIPADO') ||
+    u.includes('PAGOS ANTICIPADOS') ||
+    u.includes('SEGUROS PAGADOS') ||
+    u.includes('ALQUILERES PAGADOS') ||
+    u.includes('RENTAS PAGADAS POR ANTICIPADO') ||
+    u.includes('IMPUESTOS POR RECUPERAR') ||
+    u.includes('IMPUESTOS ANTICIPADOS') ||
+    u.includes('IVA ACREDITABLE') ||
+    u.includes('ANTICIPO A PROVEEDORES') ||
+    u.includes('OTROS ACTIVOS CORRIENTES') ||
+    u.includes('OTROS ACTIVOS CIRCULANTES')
+  ) {
+    return { category: 'ACTIVO_CORRIENTE', subType: 'OTROS_ACTIVOS_CORRIENTES' };
+  }
+
+  if (
+    u.includes('GASTOS ACUMULADOS') ||
+    u.includes('PASIVOS ACUMULADOS') ||
+    u.includes('GASTOS POR PAGAR') ||
+    u.includes('SUELDOS POR PAGAR') ||
+    u.includes('SALARIOS POR PAGAR') ||
+    u.includes('IMPUESTOS POR PAGAR') ||
+    u.includes('IR POR PAGAR') ||
+    u.includes('IVA POR PAGAR') ||
+    u.includes('RETENCIONES POR PAGAR') ||
+    u.includes('DIVIDENDOS POR PAGAR')
+  ) {
+    return { category: 'PASIVO_CORRIENTE', subType: 'CUENTAS_POR_PAGAR' };
+  }
+
+  if (
+    u.includes('GASTO') ||
+    u.includes('ADMINISTRACI') ||
+    u.includes('MERCADEO') ||
+    u.includes('COMERCIALIZACI') ||
+    u.includes('SUELDOS Y SALARIOS') ||
+    u.includes('PUBLICIDAD') ||
+    u.includes('SERVICIOS BASICOS')
+  ) {
+    return { category: 'GASTO_OPERATIVO', subType: 'GASTOS_VENTA_ADMIN' };
+  }
+
+  // 2. Activos Corrientes específicos (Inventario, Efectivo, CxC) ANTES de reglas generales de venta
+  if (
+    u.includes('INVENTARIO') ||
+    u.includes('MERCADER') ||
+    u.includes('MERCANC') ||
+    u.includes('EXISTENCIA') ||
+    u.includes('ALMACEN') ||
+    u.includes('MATERIA PRIMA') ||
+    u.includes('PRODUCTO TERMINADO') ||
+    u.includes('PRODUCTOS EN PROCESO') ||
+    u.includes('SUMINISTRO')
+  ) {
+    return { category: 'ACTIVO_CORRIENTE', subType: 'INVENTARIO' };
+  }
+
+  if (
+    !u.includes('INVENTARIO') &&
+    (/\bVENTAS?\b/.test(u) ||
+      u.includes('INGRESO OPERATIVO') ||
+      u.includes('INGRESOS OPERATIVOS') ||
+      u.includes('INGRESOS POR') ||
+      u.includes('INGRESOS DE OPERACION') ||
+      u.includes('INGRESOS PROCEDENTES') ||
+      u.includes('FACTURACI'))
+  ) {
+    // Si el encabezado explícito del documento indica que estamos en Activos, no puede ser Ingreso por Ventas
+    if (sectionHint === 'ACTIVO_CORRIENTE' || sectionHint === 'ACTIVO_NO_CORRIENTE') {
+      return { category: sectionHint, subType: sectionHint === 'ACTIVO_CORRIENTE' ? 'OTROS_ACTIVOS_CORRIENTES' : 'ACTIVO_FIJO_NETO' };
+    }
+    return { category: 'INGRESO_OPERATIVO', subType: 'VENTAS_NETAS' };
+  }
+
+  // 2. Activos Corrientes (Efectivo, CxC, Inventario)
+  if (
+    u.includes('EFECTIVO') ||
+    u.includes('CAJA') ||
+    u.includes('BANCO') ||
+    u.includes('DISPONIBLE') ||
+    u.includes('VALORES NEGOCIABLES') ||
+    u.includes('INVERSIONES TEMPORALES') ||
+    u.includes('INVERSIONES A CORTO PLAZO')
+  ) {
+    if (
+      u.includes('PRESTAMO') ||
+      u.includes('CREDITO BANCARIO') ||
+      u.includes('OBLIGACION BANCARIA') ||
+      u.includes('DEUDA BANCARIA') ||
+      u.includes('SOBREGIRO')
+    ) {
+      if (u.includes('LARGO PLAZO') || u.includes('LP') || u.includes('NO CORRIENTE') || sectionHint === 'PASIVO_NO_CORRIENTE') {
+        return { category: 'PASIVO_NO_CORRIENTE', subType: 'DEUDA_LARGO_PLAZO' };
+      }
+      return { category: 'PASIVO_CORRIENTE', subType: 'DEUDA_CORTO_PLAZO' };
+    }
+    return { category: 'ACTIVO_CORRIENTE', subType: 'EFECTIVO' };
+  }
+
+  if (
+    u.includes('COBRAR') ||
+    u.includes('CLIENTE') ||
+    u.includes('DEUDOR') ||
+    u.includes('INCOBRABLE')
+  ) {
+    if (u.includes('LARGO PLAZO') || u.includes('NO CORRIENTE') || sectionHint === 'ACTIVO_NO_CORRIENTE') {
+      return { category: 'ACTIVO_NO_CORRIENTE', subType: 'ACTIVO_FIJO_NETO' };
+    }
+    return { category: 'ACTIVO_CORRIENTE', subType: 'CUENTAS_POR_COBRAR' };
+  }
+
+  if (
+    u.includes('INVENTARIO') ||
+    u.includes('MERCADER') ||
+    u.includes('MERCANC') ||
+    u.includes('EXISTENCIA') ||
+    u.includes('ALMACEN') ||
+    u.includes('MATERIA PRIMA') ||
+    u.includes('PRODUCTO TERMINADO') ||
+    u.includes('PRODUCTOS EN PROCESO') ||
+    u.includes('SUMINISTRO')
+  ) {
+    return { category: 'ACTIVO_CORRIENTE', subType: 'INVENTARIO' };
+  }
+
+  // 3. Pasivos a Largo Plazo (verificar ANTES de 'PAGAR' o 'PRESTAMO' genérico)
+  if (
+    u.includes('LARGO PLAZO') ||
+    /\bLP\b/.test(u) ||
+    u.includes('HIPOTECA') ||
+    u.includes('BONO') ||
+    u.includes('OBLIGACIONES FINANCIERAS LP') ||
+    u.includes('PASIVO NO CORRIENTE') ||
+    u.includes('PASIVO FIJO') ||
+    (sectionHint === 'PASIVO_NO_CORRIENTE' &&
+      (u.includes('PRESTAMO') || u.includes('DEUDA') || u.includes('PAGAR') || u.includes('OBLIGACION') || u.includes('ARRENDAMIENTO')))
+  ) {
+    if (u.includes('ACTIVO') || u.includes('INVERSION') || sectionHint === 'ACTIVO_NO_CORRIENTE') {
+      return { category: 'ACTIVO_NO_CORRIENTE', subType: 'ACTIVO_FIJO_NETO' };
+    }
+    return { category: 'PASIVO_NO_CORRIENTE', subType: 'DEUDA_LARGO_PLAZO' };
+  }
+
+  // 4. Activos No Corrientes / Fijos
+  if (
+    u.includes('PROPIEDAD') ||
+    u.includes('PLANTA') ||
+    u.includes('EQUIPO') ||
+    u.includes('MAQUINARIA') ||
+    u.includes('TERRENO') ||
+    u.includes('EDIFICIO') ||
+    u.includes('MOBILIARIO') ||
+    u.includes('VEHICULO') ||
+    u.includes('TRANSPORTE') ||
+    u.includes('INSTALACIONES') ||
+    u.includes('INMUEBLE') ||
+    u.includes('INTANGIBLE') ||
+    u.includes('MARCAS') ||
+    u.includes('PATENTE') ||
+    u.includes('PLUSVALIA') ||
+    u.includes('CREDITO MERCANTIL') ||
+    u.includes('ACTIVO FIJO') ||
+    u.includes('ACTIVO NO CORRIENTE') ||
+    u.includes('OTROS ACTIVOS NO CORRIENTES') ||
+    u.includes('INVERSIONES PERMANENTES') ||
+    u.includes('INVERSIONES EN ASOCIADAS') ||
+    u.includes('DERECHO DE USO')
+  ) {
+    return { category: 'ACTIVO_NO_CORRIENTE', subType: 'ACTIVO_FIJO_NETO' };
+  }
+
+  // 5. Pasivos Corrientes (Proveedores / Cuentas por Pagar vs Deuda CP)
+  if (
+    u.includes('PROVEEDOR') ||
+    u.includes('CUENTAS POR PAGAR') ||
+    u.includes('ACREEDOR') ||
+    u.includes('ANTICIPO DE CLIENTES')
+  ) {
+    return { category: 'PASIVO_CORRIENTE', subType: 'CUENTAS_POR_PAGAR' };
+  }
+
+  if (
+    u.includes('PRESTAMO') ||
+    u.includes('DEUDA') ||
+    u.includes('PAGARE') ||
+    u.includes('DOCUMENTOS POR PAGAR') ||
+    u.includes('OBLIGACION') ||
+    u.includes('ARRENDAMIENTO') ||
+    u.includes('SOBREGIRO') ||
+    u.includes('PASIVO CORRIENTE') ||
+    u.includes('PASIVO CIRCULANTE')
+  ) {
+    return { category: 'PASIVO_CORRIENTE', subType: 'DEUDA_CORTO_PLAZO' };
+  }
+
+  if (u.includes('PAGAR')) {
+    return { category: 'PASIVO_CORRIENTE', subType: 'CUENTAS_POR_PAGAR' };
+  }
+
+  // 6. Patrimonio
+  if (
+    u.includes('CAPITAL') ||
+    u.includes('ACCION') ||
+    u.includes('APORTE') ||
+    u.includes('APORTACION') ||
+    u.includes('PRIMA EN EMISION') ||
+    u.includes('PARTICIPACIONES NO CONTROLADORAS')
+  ) {
+    return { category: 'PATRIMONIO', subType: 'CAPITAL_SOCIAL' };
+  }
+
+  if (
+    u.includes('UTILIDAD') ||
+    u.includes('RESULTADO') ||
+    u.includes('RESERVA') ||
+    u.includes('PATRIMONIO') ||
+    u.includes('SUPERAVIT') ||
+    u.includes('GANANCIAS RETENIDAS')
+  ) {
+    return { category: 'PATRIMONIO', subType: 'UTILIDADES_RETENIDAS' };
+  }
+
   if (catValid && subValid) {
     return { category: catValid, subType: subValid };
   }
 
-  if (
-    upperName.includes('EFECTIVO') ||
-    upperName.includes('CAJA') ||
-    upperName.includes('BANCO') ||
-    upperName.includes('DISPONIBLE') ||
-    upperName.includes('VALORES NEGOCIABLES')
-  ) {
-    return { category: 'ACTIVO_CORRIENTE', subType: 'EFECTIVO' };
-  }
-  if (
-    upperName.includes('COBRAR') ||
-    upperName.includes('CLIENTE') ||
-    upperName.includes('DEUDOR')
-  ) {
-    return { category: 'ACTIVO_CORRIENTE', subType: 'CUENTAS_POR_COBRAR' };
-  }
-  if (
-    upperName.includes('INVENTARIO') ||
-    upperName.includes('MERCADER') ||
-    upperName.includes('MERCANC') ||
-    upperName.includes('EXISTENCIA') ||
-    upperName.includes('ALMACÉN') ||
-    upperName.includes('ALMACEN')
-  ) {
-    return { category: 'ACTIVO_CORRIENTE', subType: 'INVENTARIO' };
-  }
-  if (
-    upperName.includes('PAGADO POR ANTICIPADO') ||
-    upperName.includes('ANTICIPO') ||
-    upperName.includes('IMPUESTO POR RECUPERAR') ||
-    upperName.includes('OTROS ACTIVOS CORRIENTES') ||
-    upperName.includes('OTROS ACTIVOS CIRCULANTES')
-  ) {
-    return { category: 'ACTIVO_CORRIENTE', subType: 'OTROS_ACTIVOS_CORRIENTES' };
-  }
-  if (
-    upperName.includes('PROPIEDAD') ||
-    upperName.includes('PLANTA') ||
-    upperName.includes('EQUIPO') ||
-    upperName.includes('MAQUINARIA') ||
-    upperName.includes('TERRENO') ||
-    upperName.includes('EDIFICIO') ||
-    upperName.includes('MOBILIARIO') ||
-    upperName.includes('VEHÍCULO') ||
-    upperName.includes('VEHICULO') ||
-    upperName.includes('INMUEBLE') ||
-    upperName.includes('INTANGIBLE') ||
-    upperName.includes('ACTIVO FIJO') ||
-    upperName.includes('ACTIVO NO CORRIENTE') ||
-    upperName.includes('DERECHO DE USO') ||
-    upperName.includes('DEPRECIACION ACUMULADA') ||
-    upperName.includes('DEPRECIACIÓN ACUMULADA')
-  ) {
-    return { category: 'ACTIVO_NO_CORRIENTE', subType: 'ACTIVO_FIJO_NETO' };
-  }
-  if (
-    upperName.includes('PAGAR') ||
-    upperName.includes('PROVEEDOR') ||
-    upperName.includes('ACREEDOR') ||
-    upperName.includes('GASTOS ACUMULADOS') ||
-    upperName.includes('IMPUESTOS POR PAGAR') ||
-    upperName.includes('RETENCIONES')
-  ) {
-    return { category: 'PASIVO_CORRIENTE', subType: 'CUENTAS_POR_PAGAR' };
-  }
-  if (
-    upperName.includes('LARGO PLAZO') ||
-    upperName.includes('NO CORRIENTE') ||
-    upperName.includes('HIPOTECA') ||
-    upperName.includes('BONO') ||
-    upperName.includes('DOCUMENTOS POR PAGAR LP')
-  ) {
-    return { category: 'PASIVO_NO_CORRIENTE', subType: 'DEUDA_LARGO_PLAZO' };
-  }
-  if (
-    upperName.includes('PRÉSTAMO') ||
-    upperName.includes('PRESTAMO') ||
-    upperName.includes('DEUDA') ||
-    upperName.includes('OBLIGACION') ||
-    upperName.includes('ARRENDAMIENTO') ||
-    upperName.includes('SOBREGIRO') ||
-    upperName.includes('PASIVO CORRIENTE') ||
-    upperName.includes('PASIVO CIRCULANTE')
-  ) {
-    return { category: 'PASIVO_CORRIENTE', subType: 'DEUDA_CORTO_PLAZO' };
-  }
-  if (
-    upperName.includes('CAPITAL') ||
-    upperName.includes('ACCION') ||
-    upperName.includes('APORTE')
-  ) {
-    return { category: 'PATRIMONIO', subType: 'CAPITAL_SOCIAL' };
-  }
-  if (
-    upperName.includes('UTILIDAD') ||
-    upperName.includes('RESULTADO') ||
-    upperName.includes('RESERVA') ||
-    upperName.includes('PATRIMONIO') ||
-    upperName.includes('SUPERÁVIT') ||
-    upperName.includes('SUPERAVIT') ||
-    upperName.includes('GANANCIAS RETENIDAS')
-  ) {
-    return { category: 'PATRIMONIO', subType: 'UTILIDADES_RETENIDAS' };
-  }
-  if (
-    upperName.includes('VENTA') ||
-    upperName.includes('INGRESO OPERATIVO') ||
-    upperName.includes('INGRESOS POR') ||
-    upperName.includes('FACTURACI')
-  ) {
-    return { category: 'INGRESO_OPERATIVO', subType: 'VENTAS_NETAS' };
-  }
-  if (
-    upperName.includes('COSTO DE VENTA') ||
-    upperName.includes('COSTO DE BIENES') ||
-    upperName.includes('COSTO DE PRODUCCI') ||
-    upperName.includes('COSTO DE LO VENDIDO')
-  ) {
-    return { category: 'COSTO_VENTAS', subType: 'COSTO_BIENES_VENDIDOS' };
-  }
-  if (upperName.includes('DEPRECIACI') || upperName.includes('AMORTIZACI')) {
-    return { category: 'GASTO_OPERATIVO', subType: 'GASTOS_DEPRECIACION' };
-  }
-  if (
-    upperName.includes('INTERÉS') ||
-    upperName.includes('INTERES') ||
-    upperName.includes('GASTO FINANCIERO') ||
-    upperName.includes('GASTOS FINANCIEROS') ||
-    upperName.includes('COMISIONES BANCARIAS')
-  ) {
-    return { category: 'GASTO_FINANCIERO', subType: 'INTERESES_PAGADOS' };
-  }
-  if (
-    upperName.includes('GASTO') ||
-    upperName.includes('ADMINISTRACI') ||
-    upperName.includes('COMERCIAL') ||
-    upperName.includes('SUELDO') ||
-    upperName.includes('PUBLICIDAD') ||
-    upperName.includes('ALQUILER') ||
-    upperName.includes('SERVICIO')
-  ) {
-    return { category: 'GASTO_OPERATIVO', subType: 'GASTOS_VENTA_ADMIN' };
+  if (sectionHint && sectionHint !== 'ESTADO_RESULTADOS') {
+    const fallbackSubMap: Record<AccountCategory, AccountSubType> = {
+      ACTIVO_CORRIENTE: 'OTROS_ACTIVOS_CORRIENTES',
+      ACTIVO_NO_CORRIENTE: 'ACTIVO_FIJO_NETO',
+      PASIVO_CORRIENTE: 'CUENTAS_POR_PAGAR',
+      PASIVO_NO_CORRIENTE: 'DEUDA_LARGO_PLAZO',
+      PATRIMONIO: 'UTILIDADES_RETENIDAS',
+      INGRESO_OPERATIVO: 'VENTAS_NETAS',
+      COSTO_VENTAS: 'COSTO_BIENES_VENDIDOS',
+      GASTO_OPERATIVO: 'GASTOS_VENTA_ADMIN',
+      GASTO_FINANCIERO: 'INTERESES_PAGADOS',
+    };
+    return { category: sectionHint, subType: fallbackSubMap[sectionHint] };
   }
 
   return {
@@ -731,8 +1153,8 @@ export function inferCategoryAndSubType(
 }
 
 /**
- * Normaliza, verifica el cuadre contable (Activo = Pasivo + Patrimonio)
- * y genera automáticamente TODOS los módulos (A al I) a partir de los datos extraídos.
+ * Normaliza los datos extraídos del ejercicio SIN INVENTAR CUENTAS
+ * y sincroniza en cascada los módulos (A al I) únicamente con los datos reales del ejercicio.
  */
 export function normalizeAndEnrichExtractedState(
   raw: Record<string, unknown>,
@@ -760,8 +1182,8 @@ export function normalizeAndEnrichExtractedState(
           };
         })
       : [
-          { id: '2023', name: 'Año 2023', year: 2023, taxRate: 30, taxAmount: null },
-          { id: '2024', name: 'Año 2024', year: 2024, taxRate: 30, taxAmount: null },
+          { id: '2023', name: 'Período Base (2023)', year: 2023, taxRate: 30, taxAmount: null },
+          { id: '2024', name: 'Período Actual (2024)', year: 2024, taxRate: 30, taxAmount: null },
         ];
 
   const comparisonPeriod = periods[0];
@@ -770,182 +1192,168 @@ export function normalizeAndEnrichExtractedState(
   const rawComp = (raw.company as Record<string, unknown>) || {};
   const company: CompanyProfile = {
     id: String(rawComp.id || `comp-${Date.now()}`),
-    name: String(rawComp.name || 'Empresa Analizada por IA, S. A.'),
+    name: String(rawComp.name || 'Empresa del Ejercicio, S. A.'),
     sector: String(rawComp.sector || 'Comercial / Industrial'),
     currency: String(rawComp.currency || 'C$'),
-    sharesOutstanding: Number(rawComp.sharesOutstanding) || 100000,
+    sharesOutstanding: Number(rawComp.sharesOutstanding) || 1000,
     marketPricePerShare: Number(rawComp.marketPricePerShare) || 100,
   };
 
+  const codePrefixByCat: Record<AccountCategory, number> = {
+    ACTIVO_CORRIENTE: 1100,
+    ACTIVO_NO_CORRIENTE: 1200,
+    PASIVO_CORRIENTE: 2100,
+    PASIVO_NO_CORRIENTE: 2200,
+    PATRIMONIO: 3100,
+    INGRESO_OPERATIVO: 4100,
+    COSTO_VENTAS: 5100,
+    GASTO_OPERATIVO: 6100,
+    GASTO_FINANCIERO: 7100,
+  };
+  const catCounters: Record<AccountCategory, number> = {
+    ACTIVO_CORRIENTE: 0,
+    ACTIVO_NO_CORRIENTE: 0,
+    PASIVO_CORRIENTE: 0,
+    PASIVO_NO_CORRIENTE: 0,
+    PATRIMONIO: 0,
+    INGRESO_OPERATIVO: 0,
+    COSTO_VENTAS: 0,
+    GASTO_OPERATIVO: 0,
+    GASTO_FINANCIERO: 0,
+  };
+
   const rawAccounts = Array.isArray(raw.accounts) ? raw.accounts : [];
-  const accounts: FinancialAccountItem[] = rawAccounts.map(
-    (acc: Record<string, unknown>, idx: number) => {
-      const name = String(acc.name || `Cuenta ${idx + 1}`);
-      const { category, subType } = inferCategoryAndSubType(
-        name,
-        String(acc.category || ''),
-        String(acc.subType || '')
-      );
-      const rawBalances = (acc.balances as Record<string, unknown>) || {};
-      const balKeys = Object.keys(rawBalances);
-      let balBase = Number(
-        rawBalances[comparisonPeriod.id] ??
-          rawBalances[String(comparisonPeriod.year)] ??
-          (balKeys.length >= 1 ? rawBalances[balKeys[0]] : undefined) ??
-          acc.baseAmount ??
-          acc.amount2023 ??
-          0
-      );
-      let balActive = Number(
-        rawBalances[activePeriod.id] ??
-          rawBalances[String(activePeriod.year)] ??
-          (balKeys.length >= 2
-            ? rawBalances[balKeys[1]]
-            : balKeys.length === 1
-            ? rawBalances[balKeys[0]]
-            : undefined) ??
-          acc.activeAmount ??
-          acc.amount2024 ??
-          acc.amount ??
-          0
-      );
+  const accounts: FinancialAccountItem[] = [];
 
-      if (Number.isNaN(balBase)) balBase = 0;
-      if (Number.isNaN(balActive)) balActive = 0;
+  rawAccounts.forEach((acc: Record<string, unknown>, idx: number) => {
+    const name = String(acc.name || '').trim();
+    if (!name) return;
+    // Barrera final: nunca aceptar fechas, encabezados, títulos o nombres de archivo como cuentas
+    if (isDateOrHeaderLine(name) || isSubtotalOrCalculatedRow(name)) return;
+    const rawBalances = (acc.balances as Record<string, unknown>) || {};
+    const balKeys = Object.keys(rawBalances);
+    let balBase = Number(
+      rawBalances[comparisonPeriod.id] ??
+        rawBalances[String(comparisonPeriod.year)] ??
+        (balKeys.length >= 1 ? rawBalances[balKeys[0]] : undefined) ??
+        acc.baseAmount ??
+        acc.amount2023 ??
+        acc.amount ??
+        0
+    );
+    let balActive = Number(
+      rawBalances[activePeriod.id] ??
+        rawBalances[String(activePeriod.year)] ??
+        (balKeys.length >= 2
+          ? rawBalances[balKeys[1]]
+          : balKeys.length === 1
+          ? rawBalances[balKeys[0]]
+          : undefined) ??
+        acc.activeAmount ??
+        acc.amount2024 ??
+        acc.amount ??
+        balBase
+    );
 
-      // Si es depreciación acumulada dentro de activo fijo y viene positiva en texto, volverla negativa
-      if (
-        category === 'ACTIVO_NO_CORRIENTE' &&
-        name.toUpperCase().includes('DEPRECIACI') &&
-        name.toUpperCase().includes('ACUMULAD') &&
-        balActive > 0
-      ) {
-        balBase = -Math.abs(balBase);
-        balActive = -Math.abs(balActive);
-      }
+    if (Number.isNaN(balBase)) balBase = 0;
+    if (Number.isNaN(balActive)) balActive = 0;
 
-      return {
-        id: String(acc.id || `acc-ai-${idx + 1}`),
-        code: String(acc.code || `${1000 + idx + 1}`),
-        name,
-        category,
-        subType,
-        balances: {
-          [comparisonPeriod.id]: balBase,
-          [activePeriod.id]: balActive,
-        },
-      };
+    // Si es una fila de Impuesto sobre la Renta del Estado de Resultados, asignarla a period.taxAmount
+    if (isIncomeTaxExpenseRow(name)) {
+      if (balBase > 0) comparisonPeriod.taxAmount = Math.abs(balBase);
+      if (balActive > 0) activePeriod.taxAmount = Math.abs(balActive);
+      return;
     }
-  );
 
-  // Si el documento solo traía Balance General sin Estado de Resultados, generar cuentas operativas estimadas para que funcionen C-V-U, DuPont y Proforma
-  const hasIncomeStatement = accounts.some(
-    (a) =>
-      a.category === 'INGRESO_OPERATIVO' ||
-      a.category === 'COSTO_VENTAS' ||
-      a.category === 'GASTO_OPERATIVO'
-  );
+    // Descartar filas de subtotales ("Total Activo", "Utilidad Bruta", "UAII", "Utilidad Neta", etc.)
+    if (isSubtotalOrCalculatedRow(name)) {
+      return;
+    }
 
-  let tempActive = computeFinancialStatements(accounts, activePeriod);
-  let tempBase = computeFinancialStatements(accounts, comparisonPeriod);
+    const { category, subType } = inferCategoryAndSubType(
+      name,
+      String(acc.category || ''),
+      String(acc.subType || ''),
+      (acc.sectionHint as AccountCategory | undefined) ?? null
+    );
 
-  if (!hasIncomeStatement && tempActive.totalActivos > 0) {
-    const estSalesBase = Math.round(tempBase.totalActivos * 1.25);
-    const estSalesActive = Math.round(tempActive.totalActivos * 1.3);
+    // Si es cuenta correctora de activo (Depreciación acumulada / Estimación incobrables) y viene positiva, volverla negativa
+    const uName = stripAccentsUpper(name);
+    if (
+      (category === 'ACTIVO_CORRIENTE' || category === 'ACTIVO_NO_CORRIENTE') &&
+      ((uName.includes('DEPRECIACI') && uName.includes('ACUMULAD')) ||
+        (uName.includes('AMORTIZACI') && uName.includes('ACUMULAD')) ||
+        uName.includes('INCOBRABLE'))
+    ) {
+      if (balBase > 0) balBase = -Math.abs(balBase);
+      if (balActive > 0) balActive = -Math.abs(balActive);
+    }
+
+    catCounters[category] += 1;
+    const autoCode = String(codePrefixByCat[category] + catCounters[category]);
+
+    accounts.push({
+      id: String(acc.id || `acc-ai-${idx + 1}`),
+      code: String(acc.code || autoCode),
+      name,
+      category,
+      subType,
+      balances: {
+        [comparisonPeriod.id]: balBase,
+        [activePeriod.id]: balActive,
+      },
+    });
+  });
+
+  // Si el ejercicio era exclusivamente de Punto de Equilibrio / Apalancamiento (sin tabla de cuentas)
+  // pero sí trae unitPrice y currentUnitsSold, reflejar únicamente esos rubros exactos en Resultados
+  const rawCvu = (raw.cvuInput as Record<string, unknown>) || {};
+  if (
+    accounts.length === 0 &&
+    Number(rawCvu.unitPrice) > 0 &&
+    Number(rawCvu.currentUnitsSold) > 0
+  ) {
+    const q = Number(rawCvu.currentUnitsSold);
+    const p = Number(rawCvu.unitPrice);
+    const cvu = Number(rawCvu.unitVariableCost) || 0;
+    const cf = Number(rawCvu.fixedOperatingCosts) || 0;
+    const inter = Number(rawCvu.interestExpense) || 0;
+
     accounts.push(
       {
-        id: 'acc-ai-er-1',
+        id: 'acc-cvu-sales',
         code: '4101',
-        name: 'Ventas netas del período (Estimadas sobre rotación)',
+        name: 'Ingresos por Ventas Netas',
         category: 'INGRESO_OPERATIVO',
         subType: 'VENTAS_NETAS',
-        balances: {
-          [comparisonPeriod.id]: estSalesBase,
-          [activePeriod.id]: estSalesActive,
-        },
+        balances: { [comparisonPeriod.id]: q * p, [activePeriod.id]: q * p },
       },
       {
-        id: 'acc-ai-er-2',
+        id: 'acc-cvu-cogs',
         code: '5101',
-        name: 'Costo de bienes vendidos',
+        name: 'Costos Variables Totales (CBV)',
         category: 'COSTO_VENTAS',
         subType: 'COSTO_BIENES_VENDIDOS',
-        balances: {
-          [comparisonPeriod.id]: Math.round(estSalesBase * 0.62),
-          [activePeriod.id]: Math.round(estSalesActive * 0.61),
-        },
+        balances: { [comparisonPeriod.id]: q * cvu, [activePeriod.id]: q * cvu },
       },
       {
-        id: 'acc-ai-er-3',
+        id: 'acc-cvu-fixed',
         code: '6101',
-        name: 'Gastos de administración y ventas',
+        name: 'Costos y Gastos Operativos Fijos',
         category: 'GASTO_OPERATIVO',
         subType: 'GASTOS_VENTA_ADMIN',
-        balances: {
-          [comparisonPeriod.id]: Math.round(estSalesBase * 0.18),
-          [activePeriod.id]: Math.round(estSalesActive * 0.18),
-        },
-      },
-      {
-        id: 'acc-ai-er-4',
-        code: '6102',
-        name: 'Gastos de depreciación del ejercicio',
-        category: 'GASTO_OPERATIVO',
-        subType: 'GASTOS_DEPRECIACION',
-        balances: {
-          [comparisonPeriod.id]: Math.round(tempBase.totalActivoNoCorriente * 0.08),
-          [activePeriod.id]: Math.round(tempActive.totalActivoNoCorriente * 0.08),
-        },
-      },
-      {
-        id: 'acc-ai-er-5',
+        balances: { [comparisonPeriod.id]: cf, [activePeriod.id]: cf },
+      }
+    );
+    if (inter > 0) {
+      accounts.push({
+        id: 'acc-cvu-int',
         code: '7101',
-        name: 'Gastos financieros por intereses',
+        name: 'Gastos Financieros (Intereses)',
         category: 'GASTO_FINANCIERO',
         subType: 'INTERESES_PAGADOS',
-        balances: {
-          [comparisonPeriod.id]: Math.round(tempBase.totalPasivos * 0.05),
-          [activePeriod.id]: Math.round(tempActive.totalPasivos * 0.05),
-        },
-      }
-    );
-    warnings.push(
-      'El documento contenía principalmente cuentas de Balance General; la IA generó una estructura de Estado de Resultados proporcional para habilitar DuPont, Punto de Equilibrio (C-V-U) y Apalancamiento.'
-    );
-    tempActive = computeFinancialStatements(accounts, activePeriod);
-    tempBase = computeFinancialStatements(accounts, comparisonPeriod);
-  }
-
-  // Auto-Cuadre Contable si hay diferencia en la Ecuación Contable (Activo = Pasivo + Patrimonio)
-  if (
-    accounts.length > 0 &&
-    (!tempActive.estaCuadrado || !tempBase.estaCuadrado)
-  ) {
-    const diffBase = tempBase.totalActivos - tempBase.totalPasivoMasPatrimonio;
-    const diffActive = tempActive.totalActivos - tempActive.totalPasivoMasPatrimonio;
-
-    if (Math.abs(diffBase) > 1 || Math.abs(diffActive) > 1) {
-      const existingRetained = accounts.find(
-        (a) => a.category === 'PATRIMONIO' && a.subType === 'UTILIDADES_RETENIDAS'
-      );
-      if (existingRetained) {
-        existingRetained.balances[comparisonPeriod.id] =
-          (existingRetained.balances[comparisonPeriod.id] || 0) + diffBase;
-        existingRetained.balances[activePeriod.id] =
-          (existingRetained.balances[activePeriod.id] || 0) + diffActive;
-      } else {
-        accounts.push({
-          id: 'acc-ai-balance-adj',
-          code: '3109',
-          name: 'Resultados acumulados y ajuste de cuadre patrimonial',
-          category: 'PATRIMONIO',
-          subType: 'UTILIDADES_RETENIDAS',
-          balances: {
-            [comparisonPeriod.id]: diffBase,
-            [activePeriod.id]: diffActive,
-          },
-        });
-      }
+        balances: { [comparisonPeriod.id]: inter, [activePeriod.id]: inter },
+      });
     }
   }
 
@@ -954,41 +1362,53 @@ export function normalizeAndEnrichExtractedState(
 
   if (accounts.length > 0) {
     detectedModules.push(
-      'A. Estados Financieros (Balance General Cuadrado y Estado de Resultados)',
-      'B. Análisis Vertical, Horizontal, Razones Financieras, DuPont y EOAF'
+      `A. Estados Financieros (${accounts.length} cuentas exactas del ejercicio)`,
+      'B. Análisis Vertical, Horizontal, Razones Financieras y DuPont'
     );
   }
 
-  // Punto de Equilibrio (C-V-U) y Apalancamiento
-  const rawCvu = (raw.cvuInput as Record<string, unknown>) || {};
-  const defaultUnits =
-    Number(rawCvu.currentUnitsSold) > 0
-      ? Number(rawCvu.currentUnitsSold)
-      : activeTotals.ventasNetas > 10000000
-      ? 1000000
-      : activeTotals.ventasNetas > 500000
-      ? 25000
-      : 5000;
+  // Punto de Equilibrio (C-V-U) y Apalancamiento adaptados exactamente a los datos extraídos
+  const explicitUnits = Number(rawCvu.currentUnitsSold) || 0;
+  const explicitPrice = Number(rawCvu.unitPrice) || 0;
+  const explicitVarCost = Number(rawCvu.unitVariableCost) || 0;
+  const explicitFixed =
+    rawCvu.fixedOperatingCosts !== undefined ? Number(rawCvu.fixedOperatingCosts) : null;
+  const explicitInterest =
+    rawCvu.interestExpense !== undefined ? Number(rawCvu.interestExpense) : null;
+
+  const inferredUnits =
+    explicitUnits > 0
+      ? explicitUnits
+      : explicitPrice > 0 && activeTotals.ventasNetas > 0
+      ? Math.round(activeTotals.ventasNetas / explicitPrice)
+      : activeTotals.ventasNetas > 0
+      ? 1000
+      : 0;
+
   const cvuInput: CvuLeverageInput = {
-    currentUnitsSold: defaultUnits,
+    currentUnitsSold: inferredUnits,
     unitPrice:
-      Number(rawCvu.unitPrice) > 0
-        ? Number(rawCvu.unitPrice)
-        : Number(((activeTotals.ventasNetas || 500000) / defaultUnits).toFixed(2)),
+      explicitPrice > 0
+        ? explicitPrice
+        : inferredUnits > 0 && activeTotals.ventasNetas > 0
+        ? Number((activeTotals.ventasNetas / inferredUnits).toFixed(2))
+        : 0,
     unitVariableCost:
-      Number(rawCvu.unitVariableCost) > 0
-        ? Number(rawCvu.unitVariableCost)
-        : Number(((activeTotals.costoBienesVendidos || 300000) / defaultUnits).toFixed(2)),
+      explicitVarCost > 0
+        ? explicitVarCost
+        : inferredUnits > 0 && activeTotals.costoBienesVendidos > 0
+        ? Number((activeTotals.costoBienesVendidos / inferredUnits).toFixed(2))
+        : 0,
     fixedOperatingCosts:
-      Number(rawCvu.fixedOperatingCosts) > 0
-        ? Number(rawCvu.fixedOperatingCosts)
-        : activeTotals.totalGastosOperativos || 100000,
+      explicitFixed !== null && !Number.isNaN(explicitFixed)
+        ? explicitFixed
+        : activeTotals.totalGastosOperativos,
     interestExpense:
-      Number(rawCvu.interestExpense) >= 0 && rawCvu.interestExpense !== undefined
-        ? Number(rawCvu.interestExpense)
-        : activeTotals.gastosFinancieros || 0,
+      explicitInterest !== null && !Number.isNaN(explicitInterest)
+        ? explicitInterest
+        : activeTotals.gastosFinancieros,
     preferredDividends: Number(rawCvu.preferredDividends) || 0,
-    taxRate: activePeriod.taxRate,
+    taxRate: Number(rawCvu.taxRate) || activePeriod.taxRate,
     priceChangePct: 0,
     variableCostChangePct: 0,
     fixedCostChangePct: 0,
@@ -1001,7 +1421,7 @@ export function normalizeAndEnrichExtractedState(
   // Flujo de Efectivo (NIC 7)
   const rawCashFlows = Array.isArray(raw.cashFlowEntries) ? raw.cashFlowEntries : [];
   const cashFlowInitialBalance =
-    raw.cashFlowInitialBalance !== undefined && Number(raw.cashFlowInitialBalance) > 0
+    raw.cashFlowInitialBalance !== undefined && Number(raw.cashFlowInitialBalance) >= 0
       ? Number(raw.cashFlowInitialBalance)
       : comparisonTotals.efectivo;
 
@@ -1052,7 +1472,7 @@ export function normalizeAndEnrichExtractedState(
       },
       {
         id: 'cf-auto-4',
-        concept: 'Variación en inventarios de mercaderías',
+        concept: 'Variación en inventarios',
         activity: 'OPERACION',
         direction: deltaInv <= 0 ? 'ENTRADA' : 'SALIDA',
         amount: Math.abs(deltaInv),
@@ -1066,14 +1486,14 @@ export function normalizeAndEnrichExtractedState(
       },
       {
         id: 'cf-auto-6',
-        concept: 'Adquisición neta de propiedad, planta y equipo',
+        concept: 'Variación en propiedad, planta y equipo',
         activity: 'INVERSION',
         direction: deltaANC >= 0 ? 'SALIDA' : 'ENTRADA',
-        amount: Math.abs(deltaANC + activeTotals.gastosDepreciacion),
+        amount: Math.abs(deltaANC),
       },
       {
         id: 'cf-auto-7',
-        concept: 'Variación neta en préstamos y obligaciones financieras',
+        concept: 'Variación en préstamos y obligaciones financieras',
         activity: 'FINANCIAMIENTO',
         direction: deltaDeuda >= 0 ? 'ENTRADA' : 'SALIDA',
         amount: Math.abs(deltaDeuda),
@@ -1085,9 +1505,9 @@ export function normalizeAndEnrichExtractedState(
 
   // Presupuesto Maestro y Estados Proforma
   const rawMb = (raw.masterBudget as Record<string, unknown>) || {};
-  const projectedUnits = Math.round(cvuInput.currentUnitsSold * 1.08);
-  const projectedPrice = Number((cvuInput.unitPrice * 1.04).toFixed(2));
-  const projectedCost = Number((cvuInput.unitVariableCost * 1.02).toFixed(2));
+  const projectedUnits = Math.round((cvuInput.currentUnitsSold || 1000) * 1.05);
+  const projectedPrice = Number(((cvuInput.unitPrice || 100) * 1.0).toFixed(2));
+  const projectedCost = Number(((cvuInput.unitVariableCost || 60) * 1.0).toFixed(2));
 
   const masterBudget: MasterBudgetInput = {
     projectionName: String(
@@ -1097,94 +1517,77 @@ export function normalizeAndEnrichExtractedState(
     projectedUnitsToSell: Number(rawMb.projectedUnitsToSell) || projectedUnits,
     projectedUnitPrice: Number(rawMb.projectedUnitPrice) || projectedPrice,
     projectedUnitCost: Number(rawMb.projectedUnitCost) || projectedCost,
-    initialInventoryUnits:
-      Number(rawMb.initialInventoryUnits) || Math.round(projectedUnits * 0.12),
-    desiredEndingInventoryUnits:
-      Number(rawMb.desiredEndingInventoryUnits) || Math.round(projectedUnits * 0.14),
-    cashSalesPct: Number(rawMb.cashSalesPct) || 70,
+    initialInventoryUnits: Number(rawMb.initialInventoryUnits) || 0,
+    desiredEndingInventoryUnits: Number(rawMb.desiredEndingInventoryUnits) || 0,
+    cashSalesPct: Number(rawMb.cashSalesPct) || 80,
     collectionsFromPriorSales:
-      Number(rawMb.collectionsFromPriorSales) || activeTotals.cuentasPorCobrar,
-    cashPurchasesPct: Number(rawMb.cashPurchasesPct) || 65,
+      rawMb.collectionsFromPriorSales !== undefined
+        ? Number(rawMb.collectionsFromPriorSales)
+        : activeTotals.cuentasPorCobrar,
+    cashPurchasesPct: Number(rawMb.cashPurchasesPct) || 80,
     paymentsForPriorPurchases:
-      Number(rawMb.paymentsForPriorPurchases) || activeTotals.cuentasPorPagar,
+      rawMb.paymentsForPriorPurchases !== undefined
+        ? Number(rawMb.paymentsForPriorPurchases)
+        : activeTotals.cuentasPorPagar,
     fixedOperatingExpenses:
-      Number(rawMb.fixedOperatingExpenses) ||
-      Math.max(
-        0,
-        activeTotals.totalGastosOperativos - activeTotals.gastosDepreciacion
-      ),
-    variableOpExpensePct: Number(rawMb.variableOpExpensePct) || 2.5,
+      rawMb.fixedOperatingExpenses !== undefined
+        ? Number(rawMb.fixedOperatingExpenses)
+        : Math.max(0, activeTotals.totalGastosOperativos - activeTotals.gastosDepreciacion),
+    variableOpExpensePct: Number(rawMb.variableOpExpensePct) || 0,
     nonCashDepreciation:
-      Number(rawMb.nonCashDepreciation) || activeTotals.gastosDepreciacion,
-    capexOutflow:
-      Number(rawMb.capexOutflow) ||
-      Math.round((activeTotals.totalActivoNoCorriente || 100000) * 0.05),
+      rawMb.nonCashDepreciation !== undefined
+        ? Number(rawMb.nonCashDepreciation)
+        : activeTotals.gastosDepreciacion,
+    capexOutflow: Number(rawMb.capexOutflow) || 0,
     interestPayment:
-      Number(rawMb.interestPayment) || activeTotals.gastosFinancieros,
+      rawMb.interestPayment !== undefined
+        ? Number(rawMb.interestPayment)
+        : activeTotals.gastosFinancieros,
     dividendPayment: Number(rawMb.dividendPayment) || 0,
-    taxPayment: Number(rawMb.taxPayment) || activeTotals.impuestos,
+    taxPayment:
+      rawMb.taxPayment !== undefined ? Number(rawMb.taxPayment) : activeTotals.impuestos,
     initialCashBalance:
-      Number(rawMb.initialCashBalance) || activeTotals.efectivo,
-    minimumCashRequired:
-      Number(rawMb.minimumCashRequired) ||
-      Math.round((activeTotals.efectivo || 50000) * 0.8),
+      rawMb.initialCashBalance !== undefined
+        ? Number(rawMb.initialCashBalance)
+        : activeTotals.efectivo,
+    minimumCashRequired: Number(rawMb.minimumCashRequired) || 0,
   };
   detectedModules.push('F/G. Presupuesto Maestro y Estados Proforma');
 
-  // Control de Inventario (Módulo I)
+  // Control de Inventario (Módulo I): Solo usar rubros del ejercicio o reflejar el saldo real de Inventario sin inventar líneas ficticias
   const rawInv = Array.isArray(raw.inventoryProducts) ? raw.inventoryProducts : [];
-  let inventoryProducts: InventoryProduct[];
+  let inventoryProducts: InventoryProduct[] = [];
   if (rawInv.length > 0) {
     inventoryProducts = rawInv.map((item: Record<string, unknown>, idx: number) => ({
       id: String(item.id || `inv-ai-${idx + 1}`),
       sku: String(item.sku || `SKU-0${idx + 1}`),
       name: String(item.name || `Rubro de Inventario ${idx + 1}`),
       category: String(item.category || 'Inventario General'),
-      initialStock: Number(item.initialStock) || 100,
-      entries: Number(item.entries) || 500,
-      exits: Number(item.exits) || 450,
-      unitCost: Number(item.unitCost) || 1000,
-      minStock: Number(item.minStock) || 120,
+      initialStock: Number(item.initialStock) || 0,
+      entries: Number(item.entries) || 100,
+      exits: Number(item.exits) || 0,
+      unitCost: Number(item.unitCost) || 100,
+      minStock: Number(item.minStock) || 20,
     }));
-  } else {
-    const totalInv = activeTotals.inventario || 100000;
+  } else if (activeTotals.inventario > 0) {
     inventoryProducts = [
       {
-        id: 'inv-auto-1',
-        sku: 'INV-A01',
-        name: 'Línea Principal de Alta Rotación (Categoría A)',
-        category: 'Producto Terminado',
-        initialStock: 400,
-        entries: 1600,
-        exits: 1500,
-        unitCost: Number(((totalInv * 0.5) / 500).toFixed(2)),
-        minStock: 450,
-      },
-      {
-        id: 'inv-auto-2',
-        sku: 'INV-B02',
-        name: 'Mercadería / Insumos Intermedios (Categoría B)',
-        category: 'Mercadería',
-        initialStock: 300,
-        entries: 1200,
-        exits: 1100,
-        unitCost: Number(((totalInv * 0.35) / 400).toFixed(2)),
-        minStock: 420,
-      },
-      {
-        id: 'inv-auto-3',
-        sku: 'INV-C03',
-        name: 'Suministros y Materiales de Empaque (Categoría C)',
-        category: 'Suministros',
-        initialStock: 200,
-        entries: 800,
-        exits: 750,
-        unitCost: Number(((totalInv * 0.15) / 250).toFixed(2)),
-        minStock: 220,
+        id: 'inv-balance-sync',
+        sku: 'INV-001',
+        name: 'Inventario General (Sincronizado de Balance General)',
+        category: 'Mercadería / Existencias',
+        initialStock: 100,
+        entries: 0,
+        exits: 0,
+        unitCost: Number((activeTotals.inventario / 100).toFixed(2)),
+        minStock: 25,
       },
     ];
   }
-  detectedModules.push('I. Control de Inventario (Existencias y Alertas de Reorden)');
+
+  if (inventoryProducts.length > 0) {
+    detectedModules.push('I. Control de Inventario');
+  }
 
   const preview: ExtractionPreviewMetrics = {
     companyName: company.name,
@@ -1206,7 +1609,7 @@ export function normalizeAndEnrichExtractedState(
     success: true,
     engine: engineLabel,
     modelUsed,
-    summary: `Se extrajeron y estructuraron exitosamente los datos de "${company.name}" (${comparisonPeriod.name} vs ${activePeriod.name}) con ${accounts.length} cuentas contables, ${cashFlowEntries.length} partidas de flujo de efectivo y ${inventoryProducts.length} rubros de inventario.`,
+    summary: `Se cargaron fielmente los datos de "${company.name}" (${comparisonPeriod.name} vs ${activePeriod.name}) con ${accounts.length} cuentas exactas del ejercicio (sin cuentas inventadas).`,
     detectedModules,
     patch: {
       company,
@@ -1227,7 +1630,6 @@ export function normalizeAndEnrichExtractedState(
 
 /**
  * Caso Comercial Preconfigurado: Comercial El Ahorro (2021-2022)
- * Permite que archivos tipo "BalanceGeneralElAhorro20212022.pdf" o similares se carguen con máxima fidelidad.
  */
 export function buildElAhorroCaseResult(
   engineLabel: 'GEMINI_PRO' | 'GEMINI_FLASH' | 'LOCAL_PARSER' = 'LOCAL_PARSER',
@@ -1362,7 +1764,7 @@ export function buildElAhorroCaseResult(
       ],
     },
     engineLabel,
-    'Motor Financiero Local de Respaldo'
+    'Motor Financiero Integrado'
   );
 }
 
@@ -1395,7 +1797,7 @@ export async function extractFinancialDataFromDocument(
     return {
       success: true,
       engine: apiKey ? 'GEMINI_PRO' : 'LOCAL_PARSER',
-      modelUsed: apiKey ? 'gemini-2.5-pro' : 'Motor Local Exacto',
+      modelUsed: apiKey ? 'gemini-2.5-pro' : 'Motor Integrado Exacto',
       summary:
         'Se identificó el informe auditado "Corporación Agrícola, S. A. y subsidiarias (2023–2024)". Se extrajeron las 36 cuentas del Balance General, las 11 cuentas del Estado de Resultados (incluyendo Nota 33 de IR), las 17 partidas del Flujo de Efectivo (NIC 7), los parámetros C-V-U/Apalancamiento, el Presupuesto Maestro 2025 y los 8 rubros de Inventario (Nota 12).',
       detectedModules: [
@@ -1437,18 +1839,29 @@ export async function extractFinancialDataFromDocument(
     };
   }
 
-  // 2. Extracción Multimodal Avanzada con Google Gemini 2.5 Pro / Flash
+  // 2. Extracción Multimodal con Google Gemini (SIEMPRE SIN INVENTAR CUENTAS)
   if (apiKey) {
     try {
-      const prompt = `Eres un auditor financiero senior experto en NIIF. Analiza el documento adjunto (PDF, imagen, tabla o texto en lenguaje natural) y extrae TODA la información financiera para autorellenar los 9 módulos del sistema.
-Incluso si el documento es un enunciado de ejercicio, un Balance General parcial o una tabla simple, extrae todas las cuentas y estima de forma contablemente coherente los datos faltantes para que el Balance General cuadre (Activo = Pasivo + Patrimonio) y exista Estado de Resultados.
-Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura exacta:
+      const prompt = `Eres un auditor financiero experto en NIIF. Analiza el documento o ejercicio adjunto y extrae FIELMENTE los datos hacia los campos del sistema.
+REGLAS ESTRICTAS E INQUEBRANTABLES:
+1. PROHIBIDO INVENTAR CUENTAS: Extrae ÚNICAMENTE las cuentas que aparecen explícitamente en el ejercicio. NO agregues cuentas estimadas ni cuentas de relleno.
+2. NO INCLUYAS FILAS DE SUBTOTALES en "accounts" (no incluyas "Total Activo", "Total Pasivo", "Utilidad Bruta", "Utilidad Operativa / UAII", "Utilidad antes de impuestos / UAI" ni "Utilidad Neta").
+3. Si aparece el monto de "Impuesto sobre la Renta (IR)" del Estado de Resultados, colócalo en "taxAmount" dentro de "periods" (y su tasa % en "taxRate"), NO como una cuenta de gasto operativo.
+4. Si el ejercicio tiene UN SOLO PERÍODO (una sola columna de montos), coloca exactamente el MISMO monto tanto en el período base como en el período actual dentro de "balances" (NUNCA alteres ni restes 10%).
+5. Clasifica cuidadosamente cada cuenta en su "category" y "subType" exacto:
+   - "Costo de ventas" -> category: "COSTO_VENTAS", subType: "COSTO_BIENES_VENDIDOS"
+   - "Gastos de venta / administración / operación" -> category: "GASTO_OPERATIVO", subType: "GASTOS_VENTA_ADMIN"
+   - "Depreciación del período" -> category: "GASTO_OPERATIVO", subType: "GASTOS_DEPRECIACION"
+   - "Gastos financieros / Intereses" -> category: "GASTO_FINANCIERO", subType: "INTERESES_PAGADOS"
+6. Si el ejercicio menciona datos de Punto de Equilibrio / Apalancamiento (precio de venta unitario, costo variable unitario, costos fijos, unidades vendidas, intereses), colócalos en "cvuInput".
+
+Devuelve EXCLUSIVAMENTE un JSON válido con esta estructura:
 {
   "company": {
-    "name": "Nombre de la empresa detectada",
-    "sector": "Sector o giro de negocio",
+    "name": "Nombre de la empresa del ejercicio",
+    "sector": "Sector",
     "currency": "C$ o US$",
-    "sharesOutstanding": 100000,
+    "sharesOutstanding": 1000,
     "marketPricePerShare": 100
   },
   "periods": [
@@ -1458,31 +1871,22 @@ Devuelve EXCLUSIVAMENTE un objeto JSON válido con esta estructura exacta:
   "accounts": [
     {
       "code": "1101",
-      "name": "Nombre de la cuenta",
+      "name": "Nombre exacto de la cuenta en el ejercicio",
       "category": "ACTIVO_CORRIENTE | ACTIVO_NO_CORRIENTE | PASIVO_CORRIENTE | PASIVO_NO_CORRIENTE | PATRIMONIO | INGRESO_OPERATIVO | COSTO_VENTAS | GASTO_OPERATIVO | GASTO_FINANCIERO",
       "subType": "EFECTIVO | CUENTAS_POR_COBRAR | INVENTARIO | OTROS_ACTIVOS_CORRIENTES | ACTIVO_FIJO_NETO | CUENTAS_POR_PAGAR | DEUDA_CORTO_PLAZO | DEUDA_LARGO_PLAZO | CAPITAL_SOCIAL | UTILIDADES_RETENIDAS | VENTAS_NETAS | COSTO_BIENES_VENDIDOS | GASTOS_VENTA_ADMIN | GASTOS_DEPRECIACION | INTERESES_PAGADOS",
       "balances": { "2023": 0, "2024": 0 }
     }
   ],
   "cvuInput": {
-    "currentUnitsSold": 10000,
-    "unitPrice": 100,
-    "unitVariableCost": 60,
-    "fixedOperatingCosts": 200000,
-    "interestExpense": 25000
-  },
-  "cashFlowInitialBalance": 0,
-  "cashFlowEntries": [
-    { "concept": "Concepto de flujo", "activity": "OPERACION | INVERSION | FINANCIAMIENTO", "direction": "ENTRADA | SALIDA", "amount": 0 }
-  ],
-  "inventoryProducts": [
-    { "sku": "SKU-01", "name": "Nombre del rubro o producto", "category": "Categoría", "initialStock": 100, "entries": 500, "exits": 400, "unitCost": 100, "minStock": 150 }
-  ]
-}
-Reglas críticas:
-- Usa como claves de "balances" los mismos "id" de los 2 períodos detectados (ej. "2021" y "2022", o "2023" y "2024").
-- Si el documento solo tiene 1 período, crea el período anterior con valores un 10% menores para permitir el análisis horizontal.
-- Todos los montos deben ser números puros sin comas ni símbolos de moneda.`;
+    "currentUnitsSold": 0,
+    "unitPrice": 0,
+    "unitVariableCost": 0,
+    "fixedOperatingCosts": 0,
+    "interestExpense": 0,
+    "preferredDividends": 0,
+    "taxRate": 30
+  }
+}`;
 
       const parts: Array<Record<string, unknown>> = [{ text: prompt }];
 
@@ -1508,23 +1912,23 @@ Reglas críticas:
             },
           });
         }
-        if (fileText && fileText.trim().length > 20) {
+        if (fileText && fileText.trim().length > 10) {
           parts.push({
-            text: `Texto auxiliar extraído del archivo (${file.name}):\n${fileText.slice(0, 75000)}`,
+            text: `Texto extraído del archivo (${file.name}):\n${fileText.slice(0, 75000)}`,
           });
         }
       }
 
       if (pastedText && pastedText.trim()) {
         parts.push({
-          text: `Texto o datos proporcionados por el usuario:\n${pastedText}`,
+          text: `Datos del ejercicio proporcionados por el usuario:\n${pastedText}`,
         });
       }
 
       const geminiRes = await callGoogleGeminiApi(apiKey, {
         contents: [{ role: 'user', parts }],
         generationConfig: {
-          temperature: 0.1,
+          temperature: 0,
           responseMimeType: 'application/json',
         },
       });
@@ -1539,21 +1943,26 @@ Reglas críticas:
           geminiRes.modelUsed === 'gemini-2.5-pro' ? 'GEMINI_PRO' : 'GEMINI_FLASH';
         return normalizeAndEnrichExtractedState(parsed, engineLabel, geminiRes.modelUsed);
       }
-
-      const localFallback = parseFinancialTextLocally(fileText || pastedText || '', file?.name);
-      if (!localFallback.success && geminiRes.errorMsg) {
-        localFallback.warnings = [
-          ...(localFallback.warnings || []),
-          'Nota: Tu proyecto de Google Cloud aún requiere habilitar Vertex AI API o usar una llave directa de Google AI Studio. Se analizó localmente.',
-        ];
-      }
-      return localFallback;
     } catch {
-      return parseFinancialTextLocally(fileText || pastedText || '', file?.name);
+      // Continuar con el motor analítico local exacto
     }
   }
 
-  return parseFinancialTextLocally(fileText || pastedText || '', file?.name);
+  // Si era una imagen y la llave de Gemini falló, ejecutar OCR ahora si aún no se había corrido
+  let finalTextToParse = fileText || pastedText || '';
+  if (
+    file &&
+    finalTextToParse.trim().split(/\r?\n/).length <= 1 &&
+    (file.type.startsWith('image/') ||
+      /\.(png|jpg|jpeg|webp)$/i.test(file.name))
+  ) {
+    const ocrLines = await extractTextFromImageWithOcr(file);
+    if (ocrLines.length > 0) {
+      finalTextToParse = `${file.name}\n${ocrLines.join('\n')}`;
+    }
+  }
+
+  return parseFinancialTextLocally(finalTextToParse, file?.name);
 }
 
 /**
@@ -1566,7 +1975,6 @@ function parseFlexibleNumber(rawToken: string): number {
     s = '-' + s.slice(1, -1);
   }
   s = s.replace(/[C$US€\s]/gi, '');
-  // Si tiene formato europeo 1.234.567,89
   if (/^-?\d{1,3}(\.\d{3})+,\d+$/.test(s)) {
     s = s.replace(/\./g, '').replace(',', '.');
   } else if (/^-?\d{1,3}(\.\d{3})+$/.test(s)) {
@@ -1578,8 +1986,8 @@ function parseFlexibleNumber(rawToken: string): number {
 }
 
 /**
- * Analizador Local Multilínea y de Lenguaje Natural:
- * Soporta tablas, CSV, JSON, PDFs con celdas separadas en varias líneas y párrafos descriptivos.
+ * Analizador Local Exacto de Ejercicios Financieros (Tablas, Excel, PDFs, CSV y Enunciados):
+ * Extrae únicamente las cuentas y parámetros presentes en el ejercicio SIN INVENTAR CUENTAS.
  */
 export function parseFinancialTextLocally(
   inputText: string,
@@ -1588,10 +1996,8 @@ export function parseFinancialTextLocally(
   const trimmed = inputText.trim();
   const lowerAll = `${fileName || ''} ${trimmed}`.toLowerCase();
 
-  // Reconocimiento de caso Comercial El Ahorro (como BalanceGeneralElAhorro20212022.pdf)
+  // Reconocimiento explícito de Comercial El Ahorro únicamente cuando el archivo/texto se llama así
   if (lowerAll.includes('el ahorro') || lowerAll.includes('elahorro')) {
-    // Si tiene suficientes cuentas extraídas en texto plano las procesaremos abajo;
-    // si era un PDF con fuentes de curvas/imagen donde no hay texto, cargamos el caso El Ahorro 2021-2022 completo
     const digitMatches = trimmed.match(/\d{3,}/g) || [];
     if (digitMatches.length < 6) {
       return buildElAhorroCaseResult('LOCAL_PARSER');
@@ -1602,7 +2008,7 @@ export function parseFinancialTextLocally(
   if (trimmed.startsWith('{')) {
     try {
       const parsed = JSON.parse(trimmed);
-      return normalizeAndEnrichExtractedState(parsed, 'LOCAL_PARSER', 'Analizador JSON Local');
+      return normalizeAndEnrichExtractedState(parsed, 'LOCAL_PARSER', 'Analizador JSON Exacto');
     } catch {
       // Continuar con análisis de texto
     }
@@ -1610,29 +2016,117 @@ export function parseFinancialTextLocally(
 
   // 2. Detectar años (ej. 2021 y 2022, o 2023 y 2024)
   const yearMatches = Array.from(
-    new Set(`${fileName || ''} ${trimmed}`.match(/\b20[12]\d\b/g) || ['2023', '2024'])
+    new Set(`${fileName || ''} ${trimmed}`.match(/\b20[12]\d\b/g) || [])
   ).sort();
-  const baseYear = Number(yearMatches[0]) || 2023;
+  const hasTwoExplicitYears = yearMatches.length >= 2;
+  const baseYear = yearMatches.length >= 1 ? Number(yearMatches[0]) : 2023;
   const activeYear =
-    yearMatches.length >= 2 ? Number(yearMatches[1]) : baseYear + 1;
+    yearMatches.length >= 2
+      ? Number(yearMatches[1])
+      : yearMatches.length === 1
+      ? Number(yearMatches[0])
+      : 2024;
+  const basePeriodId = hasTwoExplicitYears ? String(baseYear) : '2023';
+  const activePeriodId = hasTwoExplicitYears ? String(activeYear) : '2024';
+  const basePeriodName = hasTwoExplicitYears
+    ? `Año ${baseYear}`
+    : yearMatches.length === 1
+    ? `Base (${baseYear})`
+    : 'Período Base';
+  const activePeriodName = hasTwoExplicitYears
+    ? `Año ${activeYear}`
+    : yearMatches.length === 1
+    ? `Actual (${activeYear})`
+    : 'Período Actual';
 
-  // 3. Si es un párrafo en lenguaje natural separado por ";" o "," con frases tipo "Efectivo 50,000, Clientes 80,000..."
+  // 3. Extraer parámetros de Punto de Equilibrio (C-V-U) / Apalancamiento y Datos Generales si vienen en el enunciado
+  const cvuExtracted: Record<string, number> = {};
+  let detectedTaxRate = 30;
+  let detectedShares: number | undefined;
+  let detectedSharePrice: number | undefined;
+  let detectedSector: string | undefined;
+
+  const priceMatch = trimmed.match(
+    /(?:precio\s+de\s+venta(?:\s+unitario)?|precio\s+unitario|\bP\s*=)\s*[:=$C$US\s*]*([\d,]+(?:\.\d+)?)/i
+  );
+  if (priceMatch) cvuExtracted.unitPrice = parseFlexibleNumber(priceMatch[1]);
+
+  const varCostMatch = trimmed.match(
+    /(?:costo\s+variable\s+unitario|costo\s+variable\s+por\s+unidad|\bCVu\s*=)\s*[:=$C$US\s*]*([\d,]+(?:\.\d+)?)/i
+  );
+  if (varCostMatch) cvuExtracted.unitVariableCost = parseFlexibleNumber(varCostMatch[1]);
+
+  const fixedCostMatch = trimmed.match(
+    /(?:costos?\s+fijos?(?:\s+operativos?)?|gastos?\s+fijos?|\bCF\s*=)\s*[:=$C$US\s*]*([\d,]+(?:\.\d+)?)/i
+  );
+  if (fixedCostMatch) cvuExtracted.fixedOperatingCosts = parseFlexibleNumber(fixedCostMatch[1]);
+
+  const unitsMatch = trimmed.match(
+    /(?:unidades\s+vendidas(?:\s+actualmente)?|volumen\s+de\s+ventas|cantidad\s+vendida|ventas\s+en\s+unidades|\bQ\s*=)\s*[:=\s*]*([\d,]+(?:\.\d+)?)/i
+  );
+  if (unitsMatch) cvuExtracted.currentUnitsSold = parseFlexibleNumber(unitsMatch[1]);
+
+  const interestCvuMatch = trimmed.match(
+    /(?:intereses?\s+financieros?(?:\s+anuales?)?|gastos?\s+financieros?(?:\s+fijos?)?)\s*[:=$C$US\s*]*([\d,]+(?:\.\d+)?)/i
+  );
+  if (interestCvuMatch) cvuExtracted.interestExpense = parseFlexibleNumber(interestCvuMatch[1]);
+
+  const prefDivMatch = trimmed.match(
+    /(?:dividendos?\s+preferentes?)\s*[:=$C$US\s*]*([\d,]+(?:\.\d+)?)/i
+  );
+  if (prefDivMatch) cvuExtracted.preferredDividends = parseFlexibleNumber(prefDivMatch[1]);
+
+  const taxRateMatch = trimmed.match(
+    /(?:tasa\s+(?:de\s+)?impuestos?(?:\s+sobre\s+la\s+renta)?|tasa\s+fiscal|tasa\s+ir|\bIR\s*(?:del?)?)\s*[:=\s*]*(\d{1,2}(?:\.\d+)?)\s*%/i
+  );
+  if (taxRateMatch) {
+    detectedTaxRate = Number(taxRateMatch[1]);
+    cvuExtracted.taxRate = detectedTaxRate;
+  }
+
+  const sharesMatch = trimmed.match(
+    /(?:acciones\s+en\s+circulaci[oó]n|n[uú]mero\s+de\s+acciones(?:\s+comunes)?)\s*[:=\s*]*([\d,]+(?:\.\d+)?)/i
+  );
+  if (sharesMatch) {
+    detectedShares = parseFlexibleNumber(sharesMatch[1]);
+    cvuExtracted.commonShares = detectedShares;
+  }
+
+  const sharePriceMatch = trimmed.match(
+    /(?:precio\s+(?:de\s+mercado\s+)?por\s+acci[oó]n|valor\s+de\s+mercado\s+por\s+acci[oó]n)\s*[:=$C$US\s*]*([\d,]+(?:\.\d+)?)/i
+  );
+  if (sharePriceMatch) {
+    detectedSharePrice = parseFlexibleNumber(sharePriceMatch[1]);
+  }
+
+  const explicitCompanyMatch = trimmed.match(
+    /(?:nombre(?:\s+de\s+la\s+empresa)?|empresa|raz[oó]n\s+social)\s*[:=]\s*(?:\|\s*)?\**([^*\r\n|]+?)\**(?:\s*\||\s*[\r\n]|$)/i
+  );
+  const sectorMatch = trimmed.match(
+    /(?:sector|giro|industria|actividad(?:\s+principal)?)\s*[:=]\s*(?:\|\s*)?\**([^*\r\n|]+?)\**(?:\s*\||\s*[\r\n]|$)/i
+  );
+  if (sectorMatch) {
+    detectedSector = sectorMatch[1].trim();
+  }
+
+  // 4. Dividir líneas, limpiar separadores Markdown (|---|---|) y fusionar cuando un PDF separa cuenta y montos
   const rawSegments = trimmed
     .split(/\r?\n|;/)
     .map((l) => l.trim())
-    .filter(Boolean);
+    .filter((l) => Boolean(l) && !/^[|\s:-]+$/.test(l));
 
-  // Fusionar líneas cuando un PDF pone el nombre de la cuenta en una línea y los montos en las siguientes 1 o 2 líneas
   const mergedLines: string[] = [];
   const standaloneNumLineRegex = /^[\s|C$US€()*,-]*\d[\d,.\s|C$US€()-]*$/i;
 
   for (let i = 0; i < rawSegments.length; i++) {
     const curr = rawSegments[i];
+    const isHeadingLine = /^#{1,6}\s/.test(curr) || /^\d+[.)]\s+[A-ZÁÉÍÓÚÑ]/i.test(curr);
     const hasLetters = /[A-Za-zÁÉÍÓÚáéíóúÑñ]{3,}/.test(curr);
     const next1 = rawSegments[i + 1] || '';
     const next2 = rawSegments[i + 2] || '';
 
     if (
+      !isHeadingLine &&
       hasLetters &&
       !/\d{2,}/.test(curr) &&
       standaloneNumLineRegex.test(next1)
@@ -1649,57 +2143,295 @@ export function parseFinancialTextLocally(
     }
   }
 
-  // Detectar nombre de la empresa
-  let companyName = 'Empresa Analizada por IA, S. A.';
-  if (fileName) {
+  // Detectar nombre de la empresa sin usar nombres de archivos genéricos como "Caso de Prueba Financiero.md" ni extensiones
+  let companyName = 'Empresa del Ejercicio, S. A.';
+  if (
+    explicitCompanyMatch &&
+    explicitCompanyMatch[1].trim().length >= 3 &&
+    !explicitCompanyMatch[1].toLowerCase().includes('empresa de prueba')
+  ) {
+    companyName = explicitCompanyMatch[1].trim();
+  } else if (fileName) {
     const cleanName = fileName
-      .replace(/\.[^.]+$/, '')
-      .replace(/balance\s*general|estado\s*de\s*resultados|estados\s*financieros/gi, '')
+      .replace(/\.(pdf|xlsx|xls|csv|txt|md|markdown|json)\b/gi, '')
+      .replace(/\(\d+\)/g, '')
+      .replace(
+        /balance\s*general|estado\s*de\s*resultados|estados\s*financieros|caso\s*de\s*prueba(?:\s*financiero)?|ejercicio(?:\s*financiero)?/gi,
+        ''
+      )
       .replace(/\b20\d{2}\b/g, '')
       .replace(/([a-z])([A-Z])/g, '$1 $2')
-      .replace(/[_-]+/g, ' ')
+      .replace(/[._-]+/g, ' ')
       .trim();
-    if (cleanName.length >= 3) {
-      companyName = `${cleanName}, S. A.`;
+    if (cleanName.length >= 4 && !/^(md|markdown|pdf|xlsx|xls|txt|csv)$/i.test(cleanName)) {
+      companyName = cleanName;
     }
   }
-  for (const line of mergedLines.slice(0, 6)) {
-    if (
-      line.length > 4 &&
-      line.length < 85 &&
-      isCleanHumanText(line) &&
-      !/\d{3,}/.test(line) &&
-      !line.toLowerCase().includes('balance') &&
-      !line.toLowerCase().includes('estado')
-    ) {
-      companyName = line.replace(/[|;,\t]+/g, ' ').trim();
-      break;
+  if (companyName === 'Empresa del Ejercicio, S. A.') {
+    for (const line of mergedLines.slice(0, 6)) {
+      const cleanedTitle = line
+        .replace(/^[#*\s]+|[#*\s]+$/g, '')
+        .replace(/^\d+[.)]\s*/, '')
+        .trim();
+      const uLine = stripAccentsUpper(cleanedTitle);
+      if (
+        cleanedTitle.length > 4 &&
+        cleanedTitle.length < 80 &&
+        isCleanHumanText(cleanedTitle) &&
+        !/\d{3,}/.test(cleanedTitle) &&
+        !uLine.includes('CASO DE PRUEBA') &&
+        !uLine.includes('DATOS GENERALES') &&
+        !uLine.includes('BALANCE') &&
+        !uLine.includes('ESTADO') &&
+        !uLine.includes('ACTIVO') &&
+        !uLine.includes('PASIVO') &&
+        !uLine.includes('CUENTA')
+      ) {
+        companyName = cleanedTitle.replace(/[|;,\t]+/g, ' ').trim();
+        break;
+      }
     }
   }
 
   const extractedAccounts: Array<Record<string, unknown>> = [];
-  const skipKeywords = [
-    'TOTAL ACTIVO',
-    'TOTAL DE ACTIVO',
-    'SUMA DEL ACTIVO',
-    'TOTAL PASIVO',
-    'TOTAL DE PASIVO',
-    'SUMA DEL PASIVO',
-    'TOTAL PATRIMONIO',
-    'TOTAL CAPITAL',
-    'UTILIDAD BRUTA',
-    'UTILIDAD OPERATIVA',
-    'UTILIDAD NETA',
-    'UTILIDAD ANTES DE',
-    'RESULTADO DEL EJERCICIO',
-  ];
+  const extractedCashFlowEntries: Array<Record<string, unknown>> = [];
+  const extractedInventoryProducts: Array<Record<string, unknown>> = [];
+  let extractedOpeningCash: number | undefined;
+  let extractedEndingCash: number | undefined;
+  let extractedTaxBase: number | null = null;
+  let extractedTaxActive: number | null = null;
 
-  // Expresión regular amplia que captura cualquier monto numérico (incluyendo 2-3 dígitos, decimales, comas, o entre paréntesis)
+  // Rastrear tanto el bloque de módulo del documento como la sección contable dentro de Estados Financieros
+  type DocumentBlock =
+    | 'STATEMENTS'
+    | 'METADATA'
+    | 'CVU'
+    | 'CASH_FLOW'
+    | 'MASTER_BUDGET'
+    | 'INVENTORY';
+  let currentBlock: DocumentBlock = 'STATEMENTS';
+  let currentSection: AccountCategory | 'ESTADO_RESULTADOS' | null = null;
+
+  const updateSectionFromHeader = (uText: string): boolean => {
+    const cleanHeader = uText.replace(/^\d+\s*/, '').trim();
+
+    if (
+      cleanHeader.startsWith('DATOS GENERALES') ||
+      cleanHeader.startsWith('INFORMACION GENERAL') ||
+      cleanHeader.startsWith('DATOS DE LA EMPRESA')
+    ) {
+      currentBlock = 'METADATA';
+      return true;
+    }
+    if (
+      cleanHeader.includes('PUNTO DE EQUILIBRIO') ||
+      cleanHeader.includes('ANALISIS CVU') ||
+      cleanHeader.includes('ANALISIS C V U') ||
+      cleanHeader.startsWith('APALANCAMIENTO')
+    ) {
+      currentBlock = 'CVU';
+      return true;
+    }
+    if (
+      cleanHeader.includes('FLUJO DE EFECTIVO') ||
+      cleanHeader.includes('FLUJOS DE EFECTIVO') ||
+      cleanHeader.includes('FLUJO DE CAJA')
+    ) {
+      currentBlock = 'CASH_FLOW';
+      return true;
+    }
+    if (
+      cleanHeader.includes('PRESUPUESTO MAESTRO') ||
+      cleanHeader.includes('PRESUPUESTO OPERATIVO')
+    ) {
+      currentBlock = 'MASTER_BUDGET';
+      return true;
+    }
+    if (
+      cleanHeader.includes('CONTROL DE INVENTARIO') ||
+      cleanHeader.startsWith('INVENTARIO DE PRODUCTOS') ||
+      cleanHeader.startsWith('TABLA DE INVENTARIO') ||
+      cleanHeader.startsWith('MODULO DE INVENTARIO')
+    ) {
+      currentBlock = 'INVENTORY';
+      return true;
+    }
+    if (
+      cleanHeader.includes('BALANCE GENERAL') ||
+      cleanHeader.includes('ESTADO DE SITUACION')
+    ) {
+      currentBlock = 'STATEMENTS';
+      return true;
+    }
+    if (
+      cleanHeader === 'ACTIVO CORRIENTE' ||
+      cleanHeader === 'ACTIVOS CORRIENTES' ||
+      cleanHeader === 'ACTIVO CIRCULANTE' ||
+      cleanHeader === 'ACTIVOS CIRCULANTES' ||
+      cleanHeader.startsWith('ACTIVO CORRIENTE ') ||
+      cleanHeader.startsWith('ACTIVOS CORRIENTES ')
+    ) {
+      currentBlock = 'STATEMENTS';
+      currentSection = 'ACTIVO_CORRIENTE';
+      return true;
+    }
+    if (
+      cleanHeader === 'ACTIVO NO CORRIENTE' ||
+      cleanHeader === 'ACTIVOS NO CORRIENTES' ||
+      cleanHeader === 'ACTIVO FIJO' ||
+      cleanHeader === 'ACTIVOS FIJOS' ||
+      cleanHeader.startsWith('ACTIVO NO CORRIENTE ') ||
+      cleanHeader.startsWith('ACTIVOS NO CORRIENTES ')
+    ) {
+      currentBlock = 'STATEMENTS';
+      currentSection = 'ACTIVO_NO_CORRIENTE';
+      return true;
+    }
+    if (
+      cleanHeader === 'PASIVO CORRIENTE' ||
+      cleanHeader === 'PASIVOS CORRIENTES' ||
+      cleanHeader === 'PASIVO CIRCULANTE' ||
+      cleanHeader === 'PASIVOS CIRCULANTES' ||
+      cleanHeader === 'PASIVO A CORTO PLAZO' ||
+      cleanHeader.startsWith('PASIVO CORRIENTE ') ||
+      cleanHeader.startsWith('PASIVOS CORRIENTES ')
+    ) {
+      currentBlock = 'STATEMENTS';
+      currentSection = 'PASIVO_CORRIENTE';
+      return true;
+    }
+    if (
+      cleanHeader === 'PASIVO NO CORRIENTE' ||
+      cleanHeader === 'PASIVOS NO CORRIENTES' ||
+      cleanHeader === 'PASIVO A LARGO PLAZO' ||
+      cleanHeader === 'PASIVO FIJO' ||
+      cleanHeader === 'DEUDA A LARGO PLAZO' ||
+      cleanHeader.startsWith('PASIVO NO CORRIENTE ') ||
+      cleanHeader.startsWith('PASIVOS NO CORRIENTES ')
+    ) {
+      currentBlock = 'STATEMENTS';
+      currentSection = 'PASIVO_NO_CORRIENTE';
+      return true;
+    }
+    if (
+      cleanHeader === 'PATRIMONIO' ||
+      cleanHeader === 'PATRIMONIO NETO' ||
+      cleanHeader === 'CAPITAL CONTABLE' ||
+      cleanHeader.startsWith('PATRIMONIO ') ||
+      cleanHeader.startsWith('CAPITAL CONTABLE ')
+    ) {
+      currentBlock = 'STATEMENTS';
+      currentSection = 'PATRIMONIO';
+      return true;
+    }
+    if (
+      cleanHeader.includes('ESTADO DE RESULTADO') ||
+      cleanHeader === 'INGRESOS OPERATIVOS' ||
+      cleanHeader === 'INGRESOS'
+    ) {
+      currentBlock = 'STATEMENTS';
+      currentSection = 'ESTADO_RESULTADOS';
+      return true;
+    }
+    return false;
+  };
+
   const tokenNumberRegex =
     /\(\s*\d{1,3}(?:[.,]\d{3})*(?:[.,]\d+)?\s*\)|-?\d{1,3}(?:,\d{3})+(?:\.\d+)?|-?\d{1,3}(?:\.\d{3})+(?:,\d+)?|-?\d+(?:\.\d+)?/g;
 
-  mergedLines.forEach((line, idx) => {
-    const rawMatches = line.match(tokenNumberRegex);
+  const isNonAccountMetadataOrParamLine = (uText: string): boolean => {
+    return (
+      uText.startsWith('PRECIO DE VENTA') ||
+      uText.startsWith('PRECIO UNITARIO') ||
+      uText.startsWith('COSTO VARIABLE UNITARIO') ||
+      uText.startsWith('COSTOS FIJOS') ||
+      uText.startsWith('COSTO FIJO') ||
+      uText.startsWith('UNIDADES VENDIDAS') ||
+      uText.startsWith('VOLUMEN DE VENTAS') ||
+      uText.startsWith('CANTIDAD VENDIDA') ||
+      uText.startsWith('TASA DE IMPUESTO') ||
+      uText.startsWith('TASA FISCAL') ||
+      uText.startsWith('TASA IR') ||
+      uText.startsWith('ACCIONES EN CIRCULACION') ||
+      uText.startsWith('NUMERO DE ACCIONES') ||
+      uText.startsWith('PRECIO DE MERCADO') ||
+      uText.startsWith('PRECIO POR ACCION') ||
+      uText.startsWith('VALOR DE MERCADO POR ACCION') ||
+      uText.startsWith('NOMBRE DE LA EMPRESA') ||
+      uText.startsWith('MONEDA') ||
+      uText.startsWith('SECTOR') ||
+      uText.startsWith('PERIODOS')
+    );
+  };
+
+  mergedLines.forEach((rawLine, idx) => {
+    // 1. Limpiar sintaxis Markdown (#, **, *, `) y numeración de lista/sección al inicio ("1. ", "2. ", "- ")
+    const lineWithoutMd = rawLine
+      .replace(/^[#>*\s-]+/, '')
+      .replace(/^\d{1,2}[.)]\s+/, '')
+      .replace(/[*`~_]+/g, '')
+      .trim();
+
+    if (!lineWithoutMd) return;
+
+    // Descartar fechas y leyendas ("Al 31 de diciembre...", "Por los años terminados...") antes de leer números
+    if (isDateOrHeaderLine(lineWithoutMd)) return;
+
+    // Si el renglón original empezaba con "#" de encabezado Markdown (ej. "## 1. Datos Generales", "## 2. Balance General (2023 - 2024)")
+    const isMarkdownHeading = /^#{1,6}\s/.test(rawLine.trim());
+    const cleanTextOnly = stripAccentsUpper(
+      lineWithoutMd
+        .replace(tokenNumberRegex, ' ')
+        .replace(/[|;,\t:$()%=-]+/g, ' ')
+        .replace(/\s+/g, ' ')
+    );
+
+    if (isMarkdownHeading || !lineWithoutMd.match(/\d/)) {
+      updateSectionFromHeader(cleanTextOnly);
+      return;
+    }
+
+    // 2. Si estamos en la sección de CONTROL DE INVENTARIO y la línea es una fila de tabla con pipes "|"
+    if (currentBlock === 'INVENTORY' && lineWithoutMd.includes('|')) {
+      const cells = lineWithoutMd
+        .split('|')
+        .map((c) => c.trim())
+        .filter(Boolean);
+      if (cells.length >= 5) {
+        const uFirst = stripAccentsUpper(cells[0]);
+        if (uFirst === 'SKU' || uFirst === 'CODIGO' || uFirst === 'PRODUCTO') {
+          return;
+        }
+        // Formato esperado: SKU | Producto | Categoría | Stock Inicial | Entradas | Salidas | Costo Unitario | Stock Mínimo
+        const hasSkuColumn = cells.length >= 7 && /\d/.test(cells[3]);
+        const sku = hasSkuColumn ? cells[0] : `SKU-${100 + extractedInventoryProducts.length + 1}`;
+        const name = hasSkuColumn ? cells[1] : cells[0];
+        const category = hasSkuColumn ? cells[2] : 'General';
+        const numStartIdx = hasSkuColumn ? 3 : 1;
+        const initialStock = Math.abs(parseFlexibleNumber(cells[numStartIdx] || '0')) || 0;
+        const entries = Math.abs(parseFlexibleNumber(cells[numStartIdx + 1] || '0')) || 0;
+        const exits = Math.abs(parseFlexibleNumber(cells[numStartIdx + 2] || '0')) || 0;
+        const unitCost = Math.abs(parseFlexibleNumber(cells[numStartIdx + 3] || '0')) || 0;
+        const minStock = Math.abs(parseFlexibleNumber(cells[numStartIdx + 4] || '5')) || 5;
+
+        if (name && (initialStock > 0 || entries > 0 || unitCost > 0)) {
+          extractedInventoryProducts.push({
+            id: `inv-local-${extractedInventoryProducts.length + 1}`,
+            sku,
+            name,
+            category,
+            initialStock,
+            entries,
+            exits,
+            unitCost,
+            minStock,
+          });
+        }
+      }
+      return;
+    }
+
+    const rawMatches = lineWithoutMd.match(tokenNumberRegex);
     if (!rawMatches || rawMatches.length === 0) return;
 
     const cleanNums = rawMatches
@@ -1710,77 +2442,173 @@ export function parseFinancialTextLocally(
           n !== 0 &&
           Math.abs(n) !== baseYear &&
           Math.abs(n) !== activeYear &&
-          // Ignorar códigos contables típicos al inicio de línea (ej. 1101, 1102, Nota 7) si hay más números en la línea
-          !(rawMatches.length >= 2 && n >= 1 && n <= 35 && line.toLowerCase().includes(`nota ${n}`))
+          !(rawMatches.length >= 2 && n >= 1 && n <= 40 && lineWithoutMd.toLowerCase().includes(`nota ${n}`)) &&
+          !(lineWithoutMd.includes('%') && n === detectedTaxRate && rawMatches.length >= 2)
       );
 
     if (cleanNums.length === 0) return;
 
-    // Si el primer número era un código de cuenta de 4 dígitos (ej. 1101) y hay otros 2 montos después, descartar el código
-    const amounts =
-      cleanNums.length >= 3 &&
+    // Si el primer número era un código de cuenta de 4 dígitos (ej. 1101) y hay otros montos después, usar ese código y descartarlo de los montos
+    let explicitCode: string | undefined;
+    let amounts = cleanNums;
+    if (
+      cleanNums.length >= 2 &&
       cleanNums[0] >= 1000 &&
       cleanNums[0] <= 9999 &&
-      Number.isInteger(cleanNums[0])
-        ? cleanNums.slice(1)
-        : cleanNums;
+      Number.isInteger(cleanNums[0]) &&
+      lineWithoutMd.trim().startsWith(String(cleanNums[0]))
+    ) {
+      explicitCode = String(cleanNums[0]);
+      amounts = cleanNums.slice(1);
+    }
 
-    const textPart = line
+    const textPart = lineWithoutMd
       .replace(tokenNumberRegex, ' ')
       .replace(/\b(nota|c\$|us\$|córdobas|cordobas|dólares|dolares)\b/gi, ' ')
-      .replace(/[|;,\t:$()]+/g, ' ')
+      .replace(/[|;,\t:$()%=-]+/g, ' ')
+      .replace(/^[.\s]+|[.\s]+$/g, '')
       .replace(/\s+/g, ' ')
       .trim();
 
-    if (textPart.length < 3 || !isCleanHumanText(textPart)) return;
-    const upper = textPart.toUpperCase();
-    if (skipKeywords.some((k) => upper.includes(k))) return;
+    if (textPart.length < 2 || !isCleanHumanText(textPart)) return;
+    const uText = stripAccentsUpper(textPart);
 
-    const { category, subType } = inferCategoryAndSubType(textPart);
-    const amountBase = amounts.length >= 2 ? amounts[0] : Math.round(amounts[0] * 0.9);
+    // Si es un encabezado de sección que traía años o números en la misma línea, actualizar sección y NO crear cuenta
+    if (updateSectionFromHeader(uText)) {
+      return;
+    }
+
+    if (isNonAccountMetadataOrParamLine(uText) || isSubtotalOrCalculatedRow(textPart)) {
+      return;
+    }
+
+    // Si estamos dentro de FLUJO DE EFECTIVO, registrar movimientos de efectivo en lugar de cuentas del Balance
+    if (currentBlock === 'CASH_FLOW') {
+      if (uText.includes('EFECTIVO INICIAL') || uText.includes('SALDO INICIAL DE EFECTIVO')) {
+        extractedOpeningCash = Math.abs(amounts[amounts.length - 1]);
+        return;
+      }
+      if (uText.includes('EFECTIVO FINAL') || uText.includes('SALDO FINAL DE EFECTIVO')) {
+        extractedEndingCash = Math.abs(amounts[amounts.length - 1]);
+        return;
+      }
+      const cfAmount = amounts[amounts.length - 1];
+      const isInflow =
+        cfAmount > 0 &&
+        !uText.includes('COMPRA') &&
+        !uText.includes('PAGO') &&
+        !uText.includes('DIVIDENDO') &&
+        !uText.includes('SALIDA') &&
+        !uText.includes('ADQUISICION');
+      const activityType =
+        uText.includes('ACTIVO FIJO') ||
+        uText.includes('MAQUINARIA') ||
+        uText.includes('EQUIPO') ||
+        uText.includes('INVERSION')
+          ? 'INVERSION'
+          : uText.includes('PRESTAMO') ||
+            uText.includes('DEUDA') ||
+            uText.includes('DIVIDENDO') ||
+            uText.includes('CAPITAL') ||
+            uText.includes('FINANCIAMIENTO')
+          ? 'FINANCIAMIENTO'
+          : 'OPERACION';
+      extractedCashFlowEntries.push({
+        id: `cf-local-${extractedCashFlowEntries.length + 1}`,
+        concept: textPart,
+        activityType,
+        flowDirection: isInflow ? 'ENTRADA' : 'SALIDA',
+        amount: Math.abs(cfAmount),
+      });
+      return;
+    }
+
+    // Si estamos en bloques que NO son Estados Financieros (ej. Datos Generales, CVU, Presupuesto Maestro, Inventario), no mezclar con cuentas del Balance
+    if (currentBlock !== 'STATEMENTS') {
+      return;
+    }
+
+    // Si es Impuesto sobre la Renta del Estado de Resultados, guardarlo en taxAmount
+    if (isIncomeTaxExpenseRow(textPart)) {
+      extractedTaxBase = Math.abs(amounts[0]);
+      extractedTaxActive = Math.abs(amounts.length >= 2 ? amounts[1] : amounts[0]);
+      return;
+    }
+
+    // Si tiene 2 montos es comparativo (Año Base y Año Actual); si tiene 1 monto, ambos períodos llevan el MISMO valor exacto (sin inventar -10%)
+    const amountBase = amounts[0];
     const amountActive = amounts.length >= 2 ? amounts[1] : amounts[0];
+
+    const { category, subType } = inferCategoryAndSubType(
+      textPart,
+      undefined,
+      undefined,
+      currentSection
+    );
 
     extractedAccounts.push({
       id: `acc-local-${idx + 1}`,
-      code: `${1100 + idx + 1}`,
+      code: explicitCode,
       name: textPart,
       category,
       subType,
+      sectionHint: currentSection,
       balances: {
-        [String(baseYear)]: amountBase,
-        [String(activeYear)]: amountActive,
+        [basePeriodId]: amountBase,
+        [activePeriodId]: amountActive,
       },
     });
   });
 
-  if (extractedAccounts.length >= 2) {
+  if (
+    extractedAccounts.length >= 1 ||
+    extractedInventoryProducts.length >= 1 ||
+    extractedCashFlowEntries.length >= 1 ||
+    (cvuExtracted.unitPrice && cvuExtracted.currentUnitsSold)
+  ) {
     return normalizeAndEnrichExtractedState(
       {
-        company: { name: companyName, currency: 'C$' },
+        company: {
+          name: companyName,
+          sector: detectedSector,
+          currency: lowerAll.includes('us$') || lowerAll.includes('dolar') ? 'US$' : 'C$',
+          sharesOutstanding: detectedShares,
+          marketPricePerShare: detectedSharePrice,
+        },
         periods: [
-          { id: String(baseYear), name: `Año ${baseYear}`, year: baseYear, taxRate: 30 },
-          { id: String(activeYear), name: `Año ${activeYear}`, year: activeYear, taxRate: 30 },
+          {
+            id: basePeriodId,
+            name: basePeriodName,
+            year: baseYear,
+            taxRate: detectedTaxRate,
+            taxAmount: extractedTaxBase,
+          },
+          {
+            id: activePeriodId,
+            name: activePeriodName,
+            year: activeYear,
+            taxRate: detectedTaxRate,
+            taxAmount: extractedTaxActive,
+          },
         ],
         accounts: extractedAccounts,
+        cvuInput: cvuExtracted,
+        cashFlowEntries: extractedCashFlowEntries.length > 0 ? extractedCashFlowEntries : undefined,
+        openingCashBalance: extractedOpeningCash,
+        endingCashBalanceReported: extractedEndingCash,
+        inventoryProducts:
+          extractedInventoryProducts.length > 0 ? extractedInventoryProducts : undefined,
       },
       'LOCAL_PARSER',
-      'Motor Heurístico Multilínea'
+      'Analizador Financiero Exacto'
     );
-  }
-
-  if (lowerAll.includes('el ahorro') || lowerAll.includes('elahorro')) {
-    return buildElAhorroCaseResult('LOCAL_PARSER');
-  }
-
-  if (fileName) {
-    return buildElAhorroCaseResult('LOCAL_PARSER', companyName, baseYear, activeYear);
   }
 
   return {
     success: false,
     engine: 'LOCAL_PARSER',
     summary:
-      'No se detectaron suficientes cuentas contables en el texto ingresado. Ingresa al menos 2 líneas con el formato "Nombre de Cuenta | Monto Año Base | Monto Año Actual".',
+      'No se detectaron cuentas contables ni parámetros financieros legibles en la entrada. Asegúrate de subir un PDF/Excel/CSV/MD con cuentas o pegar líneas con el formato "Nombre de Cuenta | Monto".',
     detectedModules: [],
     patch: {},
   };
