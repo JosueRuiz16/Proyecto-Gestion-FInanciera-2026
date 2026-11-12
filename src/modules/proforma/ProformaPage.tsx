@@ -1,4 +1,5 @@
 import React from 'react';
+import { TrendingUp, Sparkles, HelpCircle } from 'lucide-react';
 import { useFinancialSystem } from '../../app/providers/FinancialContext';
 import { AcademicDefenseCard } from '../../components/common/AcademicDefenseCard';
 import { formatCurrency, formatPct } from '../../components/common/formatters';
@@ -11,9 +12,27 @@ export const ProformaPage: React.FC = () => {
     masterBudgetAndProforma: pf,
     duPont,
     cvuAndLeverage,
+    updateMasterBudget,
   } = useFinancialSystem();
 
   const b = state.masterBudget;
+
+  const currentGrowthPct =
+    activeTotals.ventasNetas > 0
+      ? ((pf.projectedSalesRevenue - activeTotals.ventasNetas) / activeTotals.ventasNetas) * 100
+      : 0;
+
+  const handleApplyGrowthPct = (pct: number) => {
+    const baseSales = activeTotals.ventasNetas > 0 ? activeTotals.ventasNetas : 1000000;
+    const targetRevenue = baseSales * (1 + pct / 100);
+    const unitPrice = b.projectedUnitPrice > 0 ? b.projectedUnitPrice : 100;
+    const newUnits = Math.max(1, Math.round(targetRevenue / unitPrice));
+    updateMasterBudget({
+      projectedUnitsToSell: newUnits,
+      projectedUnitPrice: unitPrice,
+      projectionName: `Escenario Crecimiento ${pct >= 0 ? `+${pct}%` : `${pct}%`}`,
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -49,6 +68,78 @@ export const ProformaPage: React.FC = () => {
           },
         ]}
       />
+
+      {/* Control de % Ventas y AFN */}
+      <div className="bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-4 shadow-lg border border-blue-500/30 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <h2 className="text-sm font-bold text-white flex items-center gap-1.5">
+              <TrendingUp className="w-4 h-4 text-emerald-400" /> % Ventas
+            </h2>
+            <p className="text-xs text-slate-300">
+              Base ({activePeriod.name}): <strong>{formatCurrency(activeTotals.ventasNetas)}</strong> → Proforma: <strong>{formatCurrency(pf.projectedSalesRevenue)}</strong> ({currentGrowthPct >= 0 ? `+${currentGrowthPct.toFixed(1)}%` : `${currentGrowthPct.toFixed(1)}%`})
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <input
+                type="number"
+                step="0.5"
+                value={Number(currentGrowthPct.toFixed(1))}
+                onChange={(e) => handleApplyGrowthPct(Number(e.target.value))}
+                className="w-20 text-right bg-white/10 border border-white/20 rounded-lg px-2 py-1 text-sm font-bold text-white focus:bg-white/20 focus:outline-none"
+              />
+              <span className="text-xs font-bold text-emerald-400">%</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Botones de un clic para simular instantáneamente */}
+        <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-white/10 text-xs">
+          <span className="text-slate-400 font-semibold text-[11px] mr-1">Simulación rápida (1 clic):</span>
+          {[-15, -10, -5, 0, 5, 10, 15, 20, 25, 30].map((pct) => (
+            <button
+              key={pct}
+              type="button"
+              onClick={() => handleApplyGrowthPct(pct)}
+              className={`px-2.5 py-1 rounded-lg font-bold transition-all text-[11px] ${
+                Math.round(currentGrowthPct) === pct
+                  ? 'bg-emerald-500 text-slate-950 shadow-md ring-2 ring-emerald-300'
+                  : 'bg-white/10 hover:bg-white/20 text-white'
+              }`}
+            >
+              {pct > 0 ? `+${pct}%` : `${pct}%`}
+            </button>
+          ))}
+        </div>
+
+        {/* Resumen de Impacto en AFN (Fondos Externos Necesarios) */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <span className="text-[10px] text-slate-400 uppercase font-bold block">Ventas Proforma</span>
+            <strong className="text-sm text-emerald-300">{formatCurrency(pf.projectedSalesRevenue)}</strong>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-xl p-3">
+            <span className="text-[10px] text-slate-400 uppercase font-bold block">Utilidad Neta Proforma</span>
+            <strong className="text-sm text-white">{formatCurrency(pf.proformaNetIncome)}</strong>
+          </div>
+          <div className={`rounded-xl p-3 border ${
+            pf.externalFinancingRequired > 0
+              ? 'bg-rose-500/20 border-rose-400/40 text-rose-200'
+              : 'bg-emerald-500/20 border-emerald-400/40 text-emerald-200'
+          }`}>
+            <span className="text-[10px] uppercase font-bold block">
+              {pf.externalFinancingRequired > 0 ? '⚠️ AFN: Préstamo Requerido' : '✅ AFN: Superávit de Caja'}
+            </span>
+            <strong className="text-sm font-black">
+              {pf.externalFinancingRequired > 0
+                ? `+${formatCurrency(pf.externalFinancingRequired)}`
+                : `${formatCurrency(pf.cashSurplusOrDeficit)}`}
+            </strong>
+          </div>
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Estado de Resultados Proforma Comparativo */}

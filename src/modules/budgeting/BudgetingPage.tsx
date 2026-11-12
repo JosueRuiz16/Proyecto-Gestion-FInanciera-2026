@@ -10,6 +10,7 @@ export const BudgetingPage: React.FC = () => {
   const {
     state,
     activePeriod,
+    activeTotals,
     masterBudgetAndProforma: mb,
     inventoryResult,
     updateMasterBudget,
@@ -17,6 +18,23 @@ export const BudgetingPage: React.FC = () => {
   } = useFinancialSystem();
 
   const b = state.masterBudget;
+
+  const currentGrowthPct =
+    activeTotals.ventasNetas > 0
+      ? ((mb.projectedSalesRevenue - activeTotals.ventasNetas) / activeTotals.ventasNetas) * 100
+      : 0;
+
+  const handleApplyGrowthPct = (pct: number) => {
+    const baseSales = activeTotals.ventasNetas > 0 ? activeTotals.ventasNetas : 1000000;
+    const targetRevenue = baseSales * (1 + pct / 100);
+    const unitPrice = b.projectedUnitPrice > 0 ? b.projectedUnitPrice : 100;
+    const newUnits = Math.max(1, Math.round(targetRevenue / unitPrice));
+    updateMasterBudget({
+      projectedUnitsToSell: newUnits,
+      projectedUnitPrice: unitPrice,
+      projectionName: `Escenario Crecimiento ${pct >= 0 ? `+${pct}%` : `${pct}%`}`,
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -131,6 +149,41 @@ export const BudgetingPage: React.FC = () => {
                 onChange={(e) => updateMasterBudget({ projectionName: e.target.value })}
                 className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
               />
+            </div>
+
+            {/* Control de % Ventas */}
+            <div className="col-span-2 bg-blue-50/70 border border-blue-200 rounded-xl p-2.5 space-y-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-1">
+                <span className="text-[11px] font-bold text-blue-950">
+                  % Ventas ({activePeriod.name}):
+                </span>
+                <div className="flex items-center gap-1">
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={Number(currentGrowthPct.toFixed(1))}
+                    onChange={(e) => handleApplyGrowthPct(Number(e.target.value))}
+                    className="w-16 text-right bg-white border border-blue-300 rounded px-1.5 py-0.5 text-xs font-bold text-blue-900"
+                  />
+                  <span className="text-xs font-bold text-blue-900">%</span>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-1">
+                {[-10, -5, 0, 5, 10, 15, 20, 25].map((pct) => (
+                  <button
+                    key={pct}
+                    type="button"
+                    onClick={() => handleApplyGrowthPct(pct)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${
+                      Math.round(currentGrowthPct) === pct
+                        ? 'bg-blue-600 text-white shadow-sm'
+                        : 'bg-white hover:bg-blue-100 text-blue-800 border border-blue-200'
+                    }`}
+                  >
+                    {pct > 0 ? `+${pct}%` : `${pct}%`}
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
               <label className="block font-medium text-slate-600 mb-1">

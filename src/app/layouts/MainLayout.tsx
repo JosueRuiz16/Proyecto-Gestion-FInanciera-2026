@@ -150,7 +150,7 @@ export const MainLayout: React.FC = () => {
             >
               <RotateCcw className="w-4 h-4" />
             </button>
-
+                                
             <button
               type="button"
               aria-label="Cerrar sesión"
@@ -495,10 +495,9 @@ export const MainLayout: React.FC = () => {
                     to={item.to}
                     onClick={() => setMobileMenuOpen(false)}
                     className={({ isActive }) =>
-                      `w-full px-3 py-2 rounded-xl flex items-center gap-2.5 text-left transition-all ${
-                        isActive
-                          ? 'text-white font-bold text-xs bg-emerald-600/35 dark:bg-emerald-500/25 border border-emerald-400/50 shadow-sm'
-                          : 'text-slate-200 hover:text-white font-medium text-xs hover:bg-white/10'
+                      `w-full px-3 py-2 rounded-xl flex items-center gap-2.5 text-left transition-all ${isActive
+                        ? 'text-white font-bold text-xs bg-emerald-600/35 dark:bg-emerald-500/25 border border-emerald-400/50 shadow-sm'
+                        : 'text-slate-200 hover:text-white font-medium text-xs hover:bg-white/10'
                       }`
                     }
                   >
