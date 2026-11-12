@@ -84,6 +84,13 @@ const hybridIndexHtml = `<!doctype html>
 </html>
 `;
 
-fs.writeFileSync('index.html', hybridIndexHtml, 'utf8');
+for (let attempt = 0; attempt < 5; attempt++) {
+  try {
+    fs.writeFileSync('index.html', hybridIndexHtml, 'utf8');
+    break;
+  } catch (err) {
+    if (attempt === 4) throw err;
+  }
+}
 console.log(`Build completado y sincronizado: ${jsFile}, ${cssFile}`);
 

@@ -1,30 +1,38 @@
 import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  AlertTriangle,
   Bot,
   CheckCircle2,
   ClipboardPaste,
+  Cpu,
   ExternalLink,
   FileSpreadsheet,
   FileText,
   KeyRound,
   Loader2,
+  Paperclip,
   Send,
   Sparkles,
   Trash2,
   UploadCloud,
   Wand2,
-  AlertTriangle,
+  Zap,
 } from 'lucide-react';
 import { useFinancialSystem } from '../../app/providers/FinancialContext';
 import {
   ChatMessage,
   ExtractionResult,
+  GeminiModelOption,
+  buildElAhorroCaseResult,
   extractFinancialDataFromDocument,
+  getPreferredGeminiModel,
   getStoredGeminiApiKey,
   hasGeminiApiKey,
   sendFinancialChatMessage,
+  setPreferredGeminiModel,
   setStoredGeminiApiKey,
+  testGeminiConnection,
 } from '../../core/ai/financialAiService';
 
 const SAMPLE_PASTE_TEXT = `Agroindustrial del Pacífico, S. A.
@@ -45,12 +53,12 @@ Gastos de depreciación | 28,000,000 | 32,000,000
 Gastos financieros (intereses) | 34,000,000 | 38,000,000`;
 
 const QUICK_PROMPTS = [
-  'Dame un dictamen financiero ejecutivo completo',
-  'Analiza la liquidez y capital de trabajo',
-  'Explica el ROE DuPont de este período',
-  'Evalúa el Punto de Equilibrio y riesgo GAO/GAF/GAT',
-  'Analiza el Flujo de Efectivo NIC 7',
-  'Revisa las alertas de Inventario (Módulo I)',
+  '¿Cómo ves a la empresa, vamos bien o mal?',
+  '¿Qué me recomiendas mejorar hoy?',
+  'Explícame la liquidez en palabras sencillas',
+  '¿Qué tan rentables somos según DuPont?',
+  '¿Cuánto necesitamos vender para estar en equilibrio?',
+  '¿Cómo están las alertas de nuestro inventario?',
 ];
 
 export const AiAssistantPage: React.FC = () => {
@@ -71,9 +79,13 @@ export const AiAssistantPage: React.FC = () => {
     clearForNewCase,
   } = useFinancialSystem();
 
-  // Configuración de API Key
+  // Configuración de API Key y Modelo Pro
   const [apiKeyInput, setApiKeyInput] = useState<string>(() => getStoredGeminiApiKey());
+  const [preferredModel, setPreferredModelState] = useState<GeminiModelOption>(() =>
+    getPreferredGeminiModel()
+  );
   const [apiKeySavedMsg, setApiKeySavedMsg] = useState<string>('');
+  const [isTestingKey, setIsTestingKey] = useState<boolean>(false);
   const [showKeyConfig, setShowKeyConfig] = useState<boolean>(() => !hasGeminiApiKey());
 
   // Estado de Lectura de Documentos
@@ -85,37 +97,52 @@ export const AiAssistantPage: React.FC = () => {
   const [extractionResult, setExtractionResult] = useState<ExtractionResult | null>(null);
   const [appliedBanner, setAppliedBanner] = useState<boolean>(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const chatFileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Estado del Chat Financiero
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome-msg',
       role: 'assistant',
-      content: `¡Hola! Soy tu **Asistente Financiero IA**. Estoy conectado en tiempo real con todos los módulos de **${state.company.name}** (${comparisonPeriod.name} vs ${activePeriod.name}).\n\nPuedes:\n1. **Subir un PDF, imagen, CSV, JSON o pegar estados financieros** a la izquierda para **autorellenar todos los módulos automáticamente**.\n2. **Preguntarme en el chat** sobre cualquier razón financiera, DuPont, punto de equilibrio, apalancamiento, flujo de efectivo o inventario.`,
+      content: `¡Hola! Soy tu **Asistente Financiero IA Pro**. Estoy conectado en tiempo real con los 9 módulos de **${state.company.name}** (${comparisonPeriod.name} vs ${activePeriod.name}).\n\n¿Qué podemos hacer juntos?\n1. **Autorelleno Total:** Sube un PDF, imagen, Excel/CSV, pega una tabla con \`Ctrl+V\` o elige uno de los **Casos Instantáneos** a la izquierda para completar todos los módulos.\n2. **Comandos en el Chat:** Pídeme en lenguaje natural cosas como *"Cambia el precio unitario a 1,800"* o pega directamente las cuentas en el chat.\n3. **Análisis Profundo:** Pregúntame sobre razones financieras, DuPont, EOAF, punto de equilibrio, GAO/GAF/GAT, flujo de efectivo o inventario.`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      engine: hasGeminiApiKey() ? 'GEMINI_AI' : 'LOCAL_ENGINE',
+      engine: hasGeminiApiKey() ? 'GEMINI_PRO' : 'LOCAL_ENGINE',
     },
   ]);
   const [chatInput, setChatInput] = useState<string>('');
   const [isSendingChat, setIsSendingChat] = useState<boolean>(false);
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  const handleSaveApiKey = () => {
+  const handleSaveApiKey = async () => {
     setStoredGeminiApiKey(apiKeyInput);
-    setApiKeySavedMsg(
-      apiKeyInput.trim()
-        ? 'API Key de Google Gemini guardada en tu navegador.'
-        : 'API Key eliminada. Usando Motor Financiero Local.'
-    );
-    setTimeout(() => setApiKeySavedMsg(''), 4000);
+    if (!apiKeyInput.trim()) {
+      setApiKeySavedMsg('API Key eliminada. Usando Motor Financiero Local.');
+      return;
+    }
+    setIsTestingKey(true);
+    setApiKeySavedMsg('Verificando conexión con Google Gemini Pro...');
+    try {
+      const check = await testGeminiConnection(apiKeyInput);
+      setApiKeySavedMsg(check.message);
+    } finally {
+      setIsTestingKey(false);
+    }
   };
 
-  const handleProcessDocument = async () => {
-    if (!selectedFile && !pastedText.trim()) return;
+  const handleModelChange = (model: GeminiModelOption) => {
+    setPreferredModelState(model);
+    setPreferredGeminiModel(model);
+  };
+
+  const handleProcessDocument = async (overrideFile?: File | null, overrideText?: string) => {
+    const fileToUse = overrideFile !== undefined ? overrideFile : selectedFile;
+    const textToUse = overrideText !== undefined ? overrideText : pastedText;
+    if (!fileToUse && !textToUse.trim()) return;
+
     setIsExtracting(true);
     setAppliedBanner(false);
     try {
-      const result = await extractFinancialDataFromDocument(selectedFile, pastedText);
+      const result = await extractFinancialDataFromDocument(fileToUse, textToUse);
       setExtractionResult(result);
       if (result.success && autoApplyOnExtract) {
         applyExtractedFinancialData(result.patch);
@@ -123,6 +150,53 @@ export const AiAssistantPage: React.FC = () => {
       }
     } finally {
       setIsExtracting(false);
+    }
+  };
+
+  const handleLoadQuickCase = async (caseType: 'AGRICOLA' | 'EL_AHORRO' | 'PACIFICO') => {
+    setIsExtracting(true);
+    setAppliedBanner(false);
+    try {
+      if (caseType === 'AGRICOLA') {
+        resetDemoData();
+        const res = await extractFinancialDataFromDocument(null, 'Corporación Agrícola, S. A.');
+        setExtractionResult(res);
+        setAppliedBanner(true);
+      } else if (caseType === 'EL_AHORRO') {
+        const res = buildElAhorroCaseResult(hasGeminiApiKey() ? 'GEMINI_PRO' : 'LOCAL_PARSER');
+        setExtractionResult(res);
+        applyExtractedFinancialData(res.patch);
+        setAppliedBanner(true);
+      } else {
+        setInputMode('TEXT');
+        setPastedText(SAMPLE_PASTE_TEXT);
+        const res = await extractFinancialDataFromDocument(null, SAMPLE_PASTE_TEXT);
+        setExtractionResult(res);
+        if (res.success) {
+          applyExtractedFinancialData(res.patch);
+          setAppliedBanner(true);
+        }
+      }
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
+  const handleGlobalPaste = async (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          e.preventDefault();
+          setInputMode('FILE');
+          setSelectedFile(file);
+          await handleProcessDocument(file, '');
+          return;
+        }
+      }
     }
   };
 
@@ -187,11 +261,57 @@ export const AiAssistantPage: React.FC = () => {
     }
   };
 
+  const handleChatFileUpload = async (file: File) => {
+    setSelectedFile(file);
+    setIsSendingChat(true);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `usr-file-${Date.now()}`,
+        role: 'user',
+        content: `📎 Analizar y autorellenar desde archivo: **${file.name}**`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      },
+    ]);
+
+    try {
+      const result = await extractFinancialDataFromDocument(file);
+      setExtractionResult(result);
+      if (result.success) {
+        applyExtractedFinancialData(result.patch);
+        setAppliedBanner(true);
+      }
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `ast-file-${Date.now()}`,
+          role: 'assistant',
+          content: result.summary,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          engine:
+            result.engine === 'GEMINI_PRO'
+              ? 'GEMINI_PRO'
+              : result.engine === 'GEMINI_FLASH'
+              ? 'GEMINI_FLASH'
+              : 'LOCAL_ENGINE',
+          appliedAction: result.success
+            ? 'Todos los módulos autorellenados desde el archivo'
+            : undefined,
+        },
+      ]);
+      setTimeout(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 80);
+    } finally {
+      setIsSendingChat(false);
+    }
+  };
+
   const geminiActive = hasGeminiApiKey();
 
   return (
-    <div className="space-y-4">
-      {/* ENCABEZADO DEL MÓDULO IA */}
+    <div className="space-y-4" onPaste={handleGlobalPaste}>
+      {/* ENCABEZADO DEL MÓDULO IA PRO */}
       <div className="glass-card p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-start gap-3">
           <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shrink-0">
@@ -200,49 +320,69 @@ export const AiAssistantPage: React.FC = () => {
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-base sm:text-lg font-extrabold text-slate-900">
-                J. Asistente IA: Lectura de Documentos y Chat Financiero
+                J. Centro de Inteligencia Financiera IA Pro y Autorelleno
               </h1>
               <span
-                className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${geminiActive
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
-                  : 'bg-blue-50 text-blue-700 border-blue-200'
-                  }`}
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                  geminiActive
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-300'
+                    : 'bg-blue-50 text-blue-700 border-blue-200'
+                }`}
               >
                 {geminiActive
-                  ? '✨ Google Gemini Vision + LLM Activo'
-                  : '⚡ Motor Financiero Local Activo'}
+                  ? `✨ Plan Pro Activo (${
+                      preferredModel === 'gemini-2.5-flash'
+                        ? 'Gemini 2.5 Flash'
+                        : 'Gemini 2.5 Pro'
+                    })`
+                  : '⚡ Motor Financiero Híbrido Local Activo'}
               </span>
             </div>
             <p className="text-xs text-slate-600 mt-0.5">
-              Sube estados financieros (PDF, Imagen, CSV, JSON o Texto) para autorellenar todos los
-              módulos automáticamente y consulta al chat inteligente en tiempo real.
+              Detecta automáticamente PDFs, imágenes (con Ctrl+V), tablas de Excel/CSV o ejercicios
+              en texto y completa todos los módulos del sistema.
             </p>
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowKeyConfig((v) => !v)}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/80 hover:bg-white border border-slate-200 text-slate-700 shadow-sm transition-all"
-        >
-          <KeyRound className="w-3.5 h-3.5 text-blue-600" />
-          <span>{showKeyConfig ? 'Ocultar API Key' : 'Configurar API Key (Gemini)'}</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-1.5 bg-white/80 border border-slate-200 rounded-xl px-2.5 py-1">
+            <Cpu className="w-3.5 h-3.5 text-indigo-600" />
+            <span className="text-[11px] font-semibold text-slate-600">Modelo:</span>
+            <select
+              value={preferredModel}
+              onChange={(e) => handleModelChange(e.target.value as GeminiModelOption)}
+              className="text-xs font-bold text-indigo-700 bg-transparent border-none focus:ring-0 py-0.5"
+            >
+              <option value="auto">Auto (Gemini 2.5 Pro → Flash)</option>
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro (Máxima Precisión)</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash (Ultra Rápido)</option>
+            </select>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowKeyConfig((v) => !v)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/80 hover:bg-white border border-slate-200 text-slate-700 shadow-sm transition-all"
+          >
+            <KeyRound className="w-3.5 h-3.5 text-blue-600" />
+            <span>{showKeyConfig ? 'Ocultar Configuración API' : 'Configurar / Probar API'}</span>
+          </button>
+        </div>
       </div>
 
-      {/* PANEL DE CONFIGURACIÓN DE GOOGLE GEMINI API KEY */}
+      {/* PANEL DE CONFIGURACIÓN Y PRUEBA DE API KEY */}
       {showKeyConfig && (
         <div className="glass-card p-4 border-l-4 border-blue-600 space-y-2.5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
               <h3 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                 <KeyRound className="w-4 h-4 text-blue-600" />
-                Configuración Opcional de Google Gemini API Key (Para Visión de PDFs escaneados e Imágenes)
+                Conexión con Google Gemini 2.5 Pro / Flash (Visión Multimodal y Razonamiento Financiero)
               </h3>
               <p className="text-[11px] text-slate-600">
-                El sistema ya incluye un <strong>Motor Financiero Local</strong> que funciona sin
-                API Key. Si agregas una clave gratuita de Google AI Studio, activas la lectura
-                multimodal directa de cualquier PDF o fotografía con Gemini 2.5 Flash.
+                Pega tu API Key de Google AI Studio (empieza por <code>AIzaSy...</code>) o de Google
+                Cloud (<code>AQ....</code>) y presiona <strong>Guardar y Probar Conexión</strong>.
               </p>
             </div>
             <a
@@ -251,7 +391,7 @@ export const AiAssistantPage: React.FC = () => {
               rel="noreferrer"
               className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:underline"
             >
-              <span>Obtener API Key gratis en Google AI Studio</span>
+              <span>Crear clave directa en Google AI Studio</span>
               <ExternalLink className="w-3.5 h-3.5" />
             </a>
           </div>
@@ -261,15 +401,26 @@ export const AiAssistantPage: React.FC = () => {
               type="password"
               value={apiKeyInput}
               onChange={(e) => setApiKeyInput(e.target.value)}
-              placeholder="Pega tu clave aquí (ej. AQ.Ab8... o AIzaSy...)"
+              placeholder="Pega tu clave aquí (ej. AIzaSy... o AQ.Ab8...)"
               className="flex-1 min-w-[240px] px-3 py-1.5 rounded-xl border border-slate-300 text-xs font-mono"
             />
             <button
               type="button"
+              disabled={isTestingKey}
               onClick={handleSaveApiKey}
-              className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold shadow-sm"
             >
-              Guardar Clave
+              {isTestingKey ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Probando...</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-3.5 h-3.5" />
+                  <span>Guardar y Probar Conexión</span>
+                </>
+              )}
             </button>
             {apiKeyInput && (
               <button
@@ -277,7 +428,7 @@ export const AiAssistantPage: React.FC = () => {
                 onClick={() => {
                   setApiKeyInput('');
                   setStoredGeminiApiKey('');
-                  setApiKeySavedMsg('API Key eliminada.');
+                  setApiKeySavedMsg('API Key eliminada. Usando Motor Financiero Local.');
                 }}
                 className="px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold border border-rose-200"
               >
@@ -286,10 +437,49 @@ export const AiAssistantPage: React.FC = () => {
             )}
           </div>
           {apiKeySavedMsg && (
-            <p className="text-xs font-semibold text-emerald-600">{apiKeySavedMsg}</p>
+            <p
+              className={`text-xs font-semibold ${
+                apiKeySavedMsg.includes('⚠️') ? 'text-amber-600' : 'text-emerald-600'
+              }`}
+            >
+              {apiKeySavedMsg}
+            </p>
           )}
         </div>
       )}
+
+      {/* BARRA DE CASOS INSTANTÁNEOS DE DEMOSTRACIÓN (1 CLIC) */}
+      <div className="glass-card px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Zap className="w-4 h-4 text-amber-500 shrink-0" />
+          <span className="text-xs font-bold text-slate-800">
+            Autorelleno Instantáneo de Casos Completos (1 Clic):
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => handleLoadQuickCase('AGRICOLA')}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all"
+          >
+            1. Corporación Agrícola, S. A. (PDF Auditado 2023–2024)
+          </button>
+          <button
+            type="button"
+            onClick={() => handleLoadQuickCase('EL_AHORRO')}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-all"
+          >
+            2. Comercial El Ahorro, S. A. (Balance 2021–2022)
+          </button>
+          <button
+            type="button"
+            onClick={() => handleLoadQuickCase('PACIFICO')}
+            className="px-3 py-1.5 rounded-xl text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white shadow-sm transition-all"
+          >
+            3. Agroindustrial del Pacífico (2023–2024)
+          </button>
+        </div>
+      </div>
 
       {/* GRID PRINCIPAL: LECTURA DE DOCUMENTOS (IZQUIERDA) + CHAT IA (DERECHA) */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4">
@@ -300,27 +490,29 @@ export const AiAssistantPage: React.FC = () => {
               <div className="flex items-center gap-2">
                 <UploadCloud className="w-5 h-5 text-blue-600" />
                 <h2 className="text-sm font-bold text-slate-900">
-                  1. Lectura de Documentos y Autorelleno
+                  1. Lector Inteligente de Documentos y Texto
                 </h2>
               </div>
               <div className="inline-flex rounded-xl bg-slate-100 p-0.5 border border-slate-200">
                 <button
                   type="button"
                   onClick={() => setInputMode('FILE')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${inputMode === 'FILE'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                    inputMode === 'FILE'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
                 >
-                  Subir Archivo
+                  Subir Doc / Imagen
                 </button>
                 <button
                   type="button"
                   onClick={() => setInputMode('TEXT')}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${inputMode === 'TEXT'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900'
-                    }`}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
+                    inputMode === 'TEXT'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
                 >
                   Pegar Texto / Tabla
                 </button>
@@ -334,18 +526,23 @@ export const AiAssistantPage: React.FC = () => {
                 onDrop={(e) => {
                   e.preventDefault();
                   const dropped = e.dataTransfer.files?.[0];
-                  if (dropped) setSelectedFile(dropped);
+                  if (dropped) {
+                    setSelectedFile(dropped);
+                    handleProcessDocument(dropped, '');
+                  }
                 }}
                 className="cursor-pointer border-2 border-dashed border-blue-300 hover:border-blue-500 rounded-2xl p-6 text-center bg-blue-50/40 transition-all space-y-2"
               >
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.txt,.json"
+                  accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.tsv,.txt,.json"
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f) setSelectedFile(f);
+                    if (f) {
+                      setSelectedFile(f);
+                    }
                   }}
                 />
                 <div className="w-12 h-12 rounded-2xl bg-blue-600/10 text-blue-600 flex items-center justify-center mx-auto">
@@ -355,17 +552,21 @@ export const AiAssistantPage: React.FC = () => {
                   <div>
                     <p className="text-xs font-bold text-blue-700">{selectedFile.name}</p>
                     <p className="text-[11px] text-slate-500">
-                      {(selectedFile.size / 1024).toFixed(1)} KB • Haz clic para cambiar archivo
+                      {(selectedFile.size / 1024).toFixed(1)} KB • Listo para analizar o haz clic
+                      para cambiar
                     </p>
                   </div>
                 ) : (
                   <div>
                     <p className="text-xs font-bold text-slate-800">
-                      Arrastra aquí tu Estado Financiero o haz clic para seleccionar
+                      Arrastra tu PDF, Imagen o CSV aquí, haz clic o presiona{' '}
+                      <kbd className="px-1.5 py-0.5 rounded bg-white border border-slate-300 text-[10px]">
+                        Ctrl+V
+                      </kbd>
                     </p>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      Soporta <strong>PDF</strong> (ej. Auditados PwC / Corporación Agrícola),{' '}
-                      <strong>Imágenes</strong> (PNG/JPG), <strong>CSV</strong>,{' '}
+                      Soporta <strong>PDFs</strong> (digitales o escaneados),{' '}
+                      <strong>Capturas de pantalla</strong>, <strong>CSV/Excel</strong>,{' '}
                       <strong>JSON</strong> o <strong>TXT</strong>
                     </p>
                   </div>
@@ -375,7 +576,7 @@ export const AiAssistantPage: React.FC = () => {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-semibold text-slate-600">
-                    Pega cuentas con sus saldos (Cuenta | Año Base | Año Activo) o JSON:
+                    Pega cualquier tabla, celdas de Excel o enunciado de ejercicio:
                   </span>
                   <button
                     type="button"
@@ -383,14 +584,14 @@ export const AiAssistantPage: React.FC = () => {
                     className="inline-flex items-center gap-1 text-[11px] font-bold text-blue-600 hover:underline"
                   >
                     <ClipboardPaste className="w-3.5 h-3.5" />
-                    <span>Cargar texto de prueba</span>
+                    <span>Insertar ejemplo editable</span>
                   </button>
                 </div>
                 <textarea
                   rows={7}
                   value={pastedText}
                   onChange={(e) => setPastedText(e.target.value)}
-                  placeholder="Ejemplo:&#10;Efectivo en caja y bancos | 45,000,000 | 62,500,000&#10;Cuentas por cobrar | 110,000,000 | 135,000,000..."
+                  placeholder="Puedes pegar filas de Excel, tablas o párrafos como:&#10;Comercial El Ahorro&#10;Efectivo | 185,000 | 242,000&#10;Cuentas por cobrar | 310,000 | 368,000..."
                   className="w-full rounded-xl border border-slate-300 p-2.5 text-xs font-mono"
                 />
               </div>
@@ -404,8 +605,8 @@ export const AiAssistantPage: React.FC = () => {
                 className="rounded border-slate-300 text-blue-600"
               />
               <span>
-                <strong>Autorellenar todos los módulos inmediatamente</strong> al finalizar la
-                lectura del documento
+                <strong>Autorellenar todos los módulos automáticamente</strong> al terminar la
+                lectura
               </span>
             </label>
 
@@ -413,18 +614,18 @@ export const AiAssistantPage: React.FC = () => {
               <button
                 type="button"
                 disabled={isExtracting || (!selectedFile && !pastedText.trim())}
-                onClick={handleProcessDocument}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs font-bold shadow-md transition-all"
+                onClick={() => handleProcessDocument()}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-white text-xs font-bold shadow-md transition-all"
               >
                 {isExtracting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Analizando documento y estructurando módulos...</span>
+                    <span>Extrayendo cuentas y calculando los 9 módulos...</span>
                   </>
                 ) : (
                   <>
                     <Wand2 className="w-4 h-4" />
-                    <span>Leer Documento con IA y Autorellenar Sistema</span>
+                    <span>Leer con IA y Autorellenar Todos los Módulos</span>
                   </>
                 )}
               </button>
@@ -446,13 +647,14 @@ export const AiAssistantPage: React.FC = () => {
               )}
             </div>
 
-            {/* RESULTADO DE LA EXTRACCIÓN */}
+            {/* VISTA PREVIA Y RESULTADO DE LA EXTRACCIÓN */}
             {extractionResult && (
               <div
-                className={`p-3.5 rounded-2xl border space-y-2.5 ${extractionResult.success
-                  ? 'bg-emerald-50/70 border-emerald-300'
-                  : 'bg-amber-50/80 border-amber-300'
-                  }`}
+                className={`p-3.5 rounded-2xl border space-y-3 ${
+                  extractionResult.success
+                    ? 'bg-emerald-50/70 border-emerald-300'
+                    : 'bg-amber-50/80 border-amber-300'
+                }`}
               >
                 <div className="flex items-start gap-2">
                   {extractionResult.success ? (
@@ -461,17 +663,65 @@ export const AiAssistantPage: React.FC = () => {
                     <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   )}
                   <div className="space-y-1">
-                    <p className="text-xs font-bold text-slate-900">
-                      {extractionResult.success
-                        ? 'Extracción Financiera Completada'
-                        : 'Atención en la Extracción'}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="text-xs font-bold text-slate-900">
+                        {extractionResult.success
+                          ? 'Extracción y Cuadre Contable Exitosos'
+                          : 'Atención en la Extracción'}
+                      </p>
+                      {extractionResult.modelUsed && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800">
+                          {extractionResult.modelUsed}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-slate-700">{extractionResult.summary}</p>
                   </div>
                 </div>
 
+                {/* MÉTRICAS CLAVE DETECTADAS */}
+                {extractionResult.preview && (
+                  <div className="grid grid-cols-2 gap-2 pt-1">
+                    <div className="p-2 rounded-xl bg-white/80 border border-emerald-200">
+                      <p className="text-[10px] text-slate-500 font-semibold">
+                        Activos ({extractionResult.preview.activePeriodName})
+                      </p>
+                      <p className="text-xs font-extrabold text-slate-900">
+                        {extractionResult.preview.currency}{' '}
+                        {extractionResult.preview.totalAssetsActive.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-white/80 border border-emerald-200">
+                      <p className="text-[10px] text-slate-500 font-semibold">
+                        Ventas Netas ({extractionResult.preview.activePeriodName})
+                      </p>
+                      <p className="text-xs font-extrabold text-blue-700">
+                        {extractionResult.preview.currency}{' '}
+                        {extractionResult.preview.netSalesActive.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-white/80 border border-emerald-200">
+                      <p className="text-[10px] text-slate-500 font-semibold">
+                        Utilidad Neta ({extractionResult.preview.activePeriodName})
+                      </p>
+                      <p className="text-xs font-extrabold text-emerald-700">
+                        {extractionResult.preview.currency}{' '}
+                        {extractionResult.preview.netIncomeActive.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="p-2 rounded-xl bg-white/80 border border-emerald-200">
+                      <p className="text-[10px] text-slate-500 font-semibold">Ecuación Contable</p>
+                      <p className="text-xs font-extrabold text-emerald-700">
+                        {extractionResult.preview.isBalancedActive
+                          ? '✅ Cuadrada (Dif. 0)'
+                          : '⚠️ Revisar saldos'}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {extractionResult.warnings && extractionResult.warnings.length > 0 && (
-                  <div className="text-[11px] text-amber-700 bg-amber-100/70 px-2.5 py-1.5 rounded-lg">
+                  <div className="text-[11px] text-amber-800 bg-amber-100/70 px-2.5 py-1.5 rounded-lg space-y-1">
                     {extractionResult.warnings.map((w, i) => (
                       <p key={i}>{w}</p>
                     ))}
@@ -481,7 +731,7 @@ export const AiAssistantPage: React.FC = () => {
                 {extractionResult.detectedModules.length > 0 && (
                   <div className="space-y-1">
                     <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-800">
-                      Módulos Autorellenados y Sincronizados:
+                      Módulos Autorellenados y Listos:
                     </p>
                     <ul className="grid grid-cols-1 gap-1">
                       {extractionResult.detectedModules.map((mod) => (
@@ -509,24 +759,36 @@ export const AiAssistantPage: React.FC = () => {
 
                 {appliedBanner && (
                   <div className="pt-1 flex flex-wrap items-center gap-1.5">
-                    <span className="text-[11px] font-extrabold text-emerald-700">
-                      ✅ ¡Todos los módulos ya están actualizados! Ir a:
+                    <span className="text-[11px] font-extrabold text-emerald-700 w-full">
+                      ✅ ¡Sistema autorellenado al 100%! Explora los módulos:
                     </span>
                     <Link
                       to="/finanzas/estados"
-                      className="px-2 py-1 rounded-lg bg-white text-blue-700 border border-blue-200 text-[11px] font-bold hover:bg-blue-50"
+                      className="px-2.5 py-1 rounded-lg bg-white text-blue-700 border border-blue-200 text-[11px] font-bold hover:bg-blue-50"
                     >
                       A. Estados Financieros →
                     </Link>
                     <Link
                       to="/finanzas/analisis"
-                      className="px-2 py-1 rounded-lg bg-white text-blue-700 border border-blue-200 text-[11px] font-bold hover:bg-blue-50"
+                      className="px-2.5 py-1 rounded-lg bg-white text-blue-700 border border-blue-200 text-[11px] font-bold hover:bg-blue-50"
                     >
                       B. Análisis y DuPont →
                     </Link>
                     <Link
+                      to="/finanzas/punto-equilibrio"
+                      className="px-2.5 py-1 rounded-lg bg-white text-blue-700 border border-blue-200 text-[11px] font-bold hover:bg-blue-50"
+                    >
+                      C. Punto de Equilibrio →
+                    </Link>
+                    <Link
+                      to="/finanzas/flujo-efectivo"
+                      className="px-2.5 py-1 rounded-lg bg-white text-blue-700 border border-blue-200 text-[11px] font-bold hover:bg-blue-50"
+                    >
+                      E. Flujo de Efectivo →
+                    </Link>
+                    <Link
                       to="/inventario"
-                      className="px-2 py-1 rounded-lg bg-white text-blue-700 border border-blue-200 text-[11px] font-bold hover:bg-blue-50"
+                      className="px-2.5 py-1 rounded-lg bg-white text-blue-700 border border-blue-200 text-[11px] font-bold hover:bg-blue-50"
                     >
                       I. Inventario →
                     </Link>
@@ -538,11 +800,16 @@ export const AiAssistantPage: React.FC = () => {
 
           {/* RESUMEN DE DATOS ACTUALMENTE CARGADOS EN EL SISTEMA */}
           <div className="glass-card p-4 space-y-2.5">
-            <div className="flex items-center gap-2">
-              <FileSpreadsheet className="w-4 h-4 text-blue-600" />
-              <h3 className="text-xs font-bold text-slate-900">
-                Estado Actual en Memoria ({state.company.name})
-              </h3>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileSpreadsheet className="w-4 h-4 text-blue-600" />
+                <h3 className="text-xs font-bold text-slate-900">
+                  Empresa Activa: {state.company.name}
+                </h3>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                {comparisonPeriod.name} vs {activePeriod.name}
+              </span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="p-2.5 rounded-xl bg-white/60 border border-slate-200/80">
@@ -579,21 +846,21 @@ export const AiAssistantPage: React.FC = () => {
           </div>
         </div>
 
-        {/* COLUMNA DERECHA: APARTADO DE CHAT FINANCIERO IA (7 COLUMNAS) */}
+        {/* COLUMNA DERECHA: APARTADO DE CHAT FINANCIERO IA PRO (7 COLUMNAS) */}
         <div className="xl:col-span-7">
-          <div className="glass-card p-4 sm:p-5 flex flex-col h-[620px]">
+          <div className="glass-card p-4 sm:p-5 flex flex-col h-[650px]">
             <div className="flex items-center justify-between pb-3 border-b border-slate-200/80">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shadow-sm">
+                <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-sm">
                   <Bot className="w-5 h-5" />
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-slate-900">
-                    2. Chat Financiero IA Interactivo
+                    2. Chat Financiero IA Pro (Análisis y Comandos de Autorelleno)
                   </h2>
                   <p className="text-[11px] text-slate-500">
-                    Conectado con los 9 módulos • Analiza razones, DuPont, flujo de caja, C-V-U y
-                    ejecuta comandos
+                    Pregunta sobre cualquier módulo, adjunta un documento con 📎 o pega datos para
+                    actualizar campos
                   </p>
                 </div>
               </div>
@@ -605,7 +872,7 @@ export const AiAssistantPage: React.FC = () => {
                     {
                       id: `welcome-${Date.now()}`,
                       role: 'assistant',
-                      content: `Historial reiniciado. ¿Qué deseas analizar hoy sobre **${state.company.name}**?`,
+                      content: `Historial reiniciado. ¿Qué deseas analizar o autorellenar hoy sobre **${state.company.name}**?`,
                       timestamp: new Date().toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
@@ -641,25 +908,32 @@ export const AiAssistantPage: React.FC = () => {
                   className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-sm ${msg.role === 'user'
-                      ? 'bg-blue-600 text-white rounded-br-sm'
-                      : 'bg-white/90 text-slate-800 border border-slate-200/90 rounded-bl-sm'
-                      }`}
+                    className={`max-w-[88%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed shadow-sm ${
+                      msg.role === 'user'
+                        ? 'bg-blue-600 text-white rounded-br-sm'
+                        : 'bg-white/95 text-slate-800 border border-slate-200/90 rounded-bl-sm'
+                    }`}
                   >
                     <div className="whitespace-pre-wrap">{msg.content}</div>
                     {msg.appliedAction && (
                       <div className="mt-2 px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 text-[11px] font-bold flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                         <span>{msg.appliedAction}</span>
                       </div>
                     )}
                     <div
-                      className={`mt-1 text-[10px] flex items-center justify-end gap-1.5 ${msg.role === 'user' ? 'text-blue-100' : 'text-slate-400'
-                        }`}
+                      className={`mt-1 text-[10px] flex items-center justify-end gap-1.5 ${
+                        msg.role === 'user' ? 'text-blue-100' : 'text-slate-400'
+                      }`}
                     >
                       {msg.engine && (
                         <span>
-                          {msg.engine === 'GEMINI_AI' ? '✨ Gemini AI' : '⚡ Motor Financiero'} •
+                          {msg.engine === 'GEMINI_PRO'
+                            ? '✨ Gemini 2.5 Pro'
+                            : msg.engine === 'GEMINI_FLASH'
+                            ? '✨ Gemini 2.5 Flash'
+                            : '⚡ Motor Financiero'}{' '}
+                          •
                         </span>
                       )}
                       <span>{msg.timestamp}</span>
@@ -671,14 +945,14 @@ export const AiAssistantPage: React.FC = () => {
                 <div className="flex justify-start">
                   <div className="rounded-2xl px-3.5 py-2.5 bg-white/90 border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                    <span>Calculando y redactando análisis financiero...</span>
+                    <span>Procesando análisis financiero y sincronizando módulos...</span>
                   </div>
                 </div>
               )}
               <div ref={chatEndRef} />
             </div>
 
-            {/* BARRA DE ENTRADA DEL CHAT */}
+            {/* BARRA DE ENTRADA DEL CHAT CON ADJUNTO DIRECTO */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -687,10 +961,28 @@ export const AiAssistantPage: React.FC = () => {
               className="pt-2.5 border-t border-slate-200/80 flex items-center gap-2"
             >
               <input
+                ref={chatFileInputRef}
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.tsv,.txt,.json"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) handleChatFileUpload(f);
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => chatFileInputRef.current?.click()}
+                className="p-2 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 border border-slate-200 transition-colors"
+                title="Adjuntar documento (PDF, Imagen, CSV) para autorellenar desde el chat"
+              >
+                <Paperclip className="w-4 h-4" />
+              </button>
+              <input
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Escribe tu consulta financiera o pide 'cargar ejemplo' / 'analiza DuPont'..."
+                placeholder="Pregunta sobre los módulos, pide 'cargar el ahorro' o pega cuentas para autorellenar..."
                 className="flex-1 px-3.5 py-2 rounded-xl border border-slate-300 text-xs"
               />
               <button
@@ -708,4 +1000,3 @@ export const AiAssistantPage: React.FC = () => {
     </div>
   );
 };
-

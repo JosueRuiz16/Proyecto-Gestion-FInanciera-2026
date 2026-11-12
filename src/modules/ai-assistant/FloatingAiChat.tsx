@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   Loader2,
   Maximize2,
+  Paperclip,
   Send,
   Sparkles,
   UploadCloud,
@@ -42,7 +43,7 @@ export const FloatingAiChat: React.FC = () => {
     {
       id: 'float-welcome',
       role: 'assistant',
-      content: `Hola, soy tu **Asistente IA Financiero**. Puedes preguntarme sobre el módulo actual o subir un documento aquí mismo para autorellenar todos los módulos.`,
+      content: `Hola, soy tu **Asistente IA Financiero Pro**. Puedes preguntarme sobre este módulo, pegar datos o adjuntar un documento (PDF/Imagen/CSV) con 📎 para autorellenar todos los módulos.`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -51,7 +52,6 @@ export const FloatingAiChat: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
 
-  // Si ya estamos en la pantalla dedicada /ia-asistente, ocultar el botón flotante para no duplicar
   if (location.pathname.startsWith('/ia-asistente')) {
     return null;
   }
@@ -117,7 +117,7 @@ export const FloatingAiChat: React.FC = () => {
       {
         id: `f-file-${Date.now()}`,
         role: 'user',
-        content: `📄 Subiendo documento para autorelleno: ${file.name}`,
+        content: `📄 Analizando documento para autorelleno: ${file.name}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
@@ -134,7 +134,12 @@ export const FloatingAiChat: React.FC = () => {
           role: 'assistant',
           content: result.summary,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          engine: result.engine === 'GEMINI_AI' ? 'GEMINI_AI' : 'LOCAL_ENGINE',
+          engine:
+            result.engine === 'GEMINI_PRO'
+              ? 'GEMINI_PRO'
+              : result.engine === 'GEMINI_FLASH'
+              ? 'GEMINI_FLASH'
+              : 'LOCAL_ENGINE',
           appliedAction: result.success
             ? 'Todos los módulos autorellenados automáticamente'
             : undefined,
@@ -153,21 +158,21 @@ export const FloatingAiChat: React.FC = () => {
           type="button"
           onClick={() => setIsOpen(true)}
           className="inline-flex items-center gap-2 px-4 py-3 rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-extrabold shadow-xl ring-2 ring-white/80 dark:ring-emerald-400/50 transition-transform hover:scale-105 active:scale-95"
-          title="Abrir Asistente IA y Lectura de Documentos"
+          title="Abrir Asistente IA Pro y Autorelleno"
         >
           <Sparkles className="w-4 h-4" />
           <span>Asistente IA / Autorelleno</span>
         </button>
       ) : (
-        <div className="w-[340px] sm:w-[400px] h-[510px] glass-card !rounded-3xl shadow-2xl border border-blue-200 dark:border-emerald-500/40 flex flex-col overflow-hidden animate-fadeIn">
+        <div className="w-[340px] sm:w-[410px] h-[520px] glass-card !rounded-3xl shadow-2xl border border-blue-200 dark:border-emerald-500/40 flex flex-col overflow-hidden animate-fadeIn">
           {/* Cabecera del widget flotante */}
           <div className="px-4 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Bot className="w-5 h-5" />
               <div>
-                <p className="text-xs font-extrabold leading-tight">Asistente Financiero IA</p>
+                <p className="text-xs font-extrabold leading-tight">Asistente Financiero IA Pro</p>
                 <p className="text-[10px] text-blue-100 leading-tight">
-                  {hasGeminiApiKey() ? 'Gemini AI Activo' : 'Motor Financiero Activo'} •{' '}
+                  {hasGeminiApiKey() ? 'Gemini 2.5 Pro Activo' : 'Motor Híbrido Activo'} •{' '}
                   {activePeriod.name}
                 </p>
               </div>
@@ -178,7 +183,7 @@ export const FloatingAiChat: React.FC = () => {
                 to="/ia-asistente"
                 onClick={() => setIsOpen(false)}
                 className="p-1.5 rounded-lg hover:bg-white/20 text-white"
-                title="Abrir módulo completo de IA y Lectura de Documentos"
+                title="Abrir pantalla completa de IA y Lectura de Documentos"
               >
                 <Maximize2 className="w-4 h-4" />
               </Link>
@@ -198,7 +203,7 @@ export const FloatingAiChat: React.FC = () => {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.txt,.json"
+              accept=".pdf,.png,.jpg,.jpeg,.webp,.csv,.tsv,.txt,.json"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0];
@@ -237,10 +242,11 @@ export const FloatingAiChat: React.FC = () => {
                 className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}
               >
                 <div
-                  className={`max-w-[88%] rounded-2xl px-3 py-2 text-xs leading-relaxed ${m.role === 'user'
+                  className={`max-w-[88%] rounded-2xl px-3 py-2 text-xs leading-relaxed ${
+                    m.role === 'user'
                       ? 'bg-blue-600 text-white rounded-br-sm'
                       : 'bg-white/95 text-slate-800 border border-slate-200 rounded-bl-sm'
-                    }`}
+                  }`}
                 >
                   <div className="whitespace-pre-wrap">{m.content}</div>
                   {m.appliedAction && (
@@ -256,7 +262,7 @@ export const FloatingAiChat: React.FC = () => {
               <div className="flex justify-start">
                 <div className="rounded-2xl px-3 py-2 bg-white border border-slate-200 text-xs text-slate-600 flex items-center gap-2">
                   <Loader2 className="w-3.5 h-3.5 animate-spin text-blue-600" />
-                  <span>Procesando con IA...</span>
+                  <span>Procesando con IA Pro...</span>
                 </div>
               </div>
             )}
@@ -271,11 +277,19 @@ export const FloatingAiChat: React.FC = () => {
             }}
             className="p-2.5 border-t border-slate-200/80 flex items-center gap-1.5 bg-white/80"
           >
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 rounded-xl bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-600 border border-slate-200"
+              title="Adjuntar documento para autorellenar"
+            >
+              <Paperclip className="w-3.5 h-3.5" />
+            </button>
             <input
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Pregunta sobre este módulo o sube un doc..."
+              placeholder="Pregunta o pega cuentas para autorellenar..."
               className="flex-1 px-3 py-1.5 rounded-xl border border-slate-300 text-xs"
             />
             <button
@@ -291,4 +305,3 @@ export const FloatingAiChat: React.FC = () => {
     </div>
   );
 };
-

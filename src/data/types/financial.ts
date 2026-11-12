@@ -132,10 +132,81 @@ export interface PersonalTransaction {
   isFixed: boolean;
 }
 
+export interface StudentWeeklyRecordItem {
+  id: string;
+  date: string;
+  week: number;
+  fromMonday: string;
+  toSunday: string;
+  movementType: 'Ingreso' | 'Gasto' | 'Reserva' | 'Ahorro';
+  category: string;
+  description: string;
+  amount: number;
+  priority: string;
+  medium: string;
+  observation: string;
+}
+
+export interface StudentWeeklyTrackingRow {
+  month: number;
+  week: number;
+  from: string;
+  to: string;
+  income: number;
+  expenses: number;
+  savings: number;
+  reserve: number;
+  balance: number | null;
+  accumulatedSavings: number;
+  goalProgressPct: number; // ej. 0.0875 -> 8.75% o 1.6375 -> 163.75%
+}
+
+export interface StudentProjectedCategoryRow {
+  category: string;
+  plannedAmount: number;
+  incomePct: number;
+  type: string;
+  comment: string;
+}
+
+export interface StudentBudgetControlData {
+  studentName: string;
+  semesterGoal: string;
+  goalCost: number;
+  durationWeeks: number;
+  recommendedWeeklyContribution?: number | null;
+  startDate: string;
+  endDate: string;
+  autoTotalIncome: number;
+  autoTotalExpenses: number;
+  autoTotalSavings: number;
+  autoAugustSavings?: number;
+  autoAccumulatedReserve: number;
+  autoAvailableBalance: number;
+  autoGoalAchievementRatio: number; // 1.6375 = 163.75%
+  autoInitialRatio?: number; // 0.2625 = 26.25%
+  weeklyLogNote: string;
+  trackingNote: string;
+  projectedNote: string;
+  projectionType: string;
+  availableWeeklyIncome: number;
+  frequency: string;
+  totalAssigned: number;
+  projectedDifference: number;
+  assignedPct: number;
+  projectedStatus: string;
+  projectedSavings: number;
+  projectedCategories: StudentProjectedCategoryRow[];
+  weeklyTracking: StudentWeeklyTrackingRow[];
+  weeklyRecords: StudentWeeklyRecordItem[];
+}
+
 export interface PersonalBudgetData {
   monthLabel: string;
   savingsGoalPct: number; // Meta de ahorro sugerida (% de ingresos)
   transactions: PersonalTransaction[];
+  /** Control de presupuesto estudiantil detallado (ej. Alejandra Abarca y demás integrantes) */
+  studentControl?: StudentBudgetControlData;
 }
 
 /**

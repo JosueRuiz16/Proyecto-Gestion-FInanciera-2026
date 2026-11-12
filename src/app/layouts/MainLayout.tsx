@@ -7,6 +7,7 @@ import {
   Calculator,
   CheckCircle2,
   AlertTriangle,
+  Download,
   FileSpreadsheet,
   FolderKanban,
   Gauge,
@@ -14,6 +15,7 @@ import {
   LogOut,
   Menu,
   Moon,
+  Printer,
   RotateCcw,
   Scale,
   Sparkles,
@@ -25,6 +27,10 @@ import {
 import { useFinancialSystem } from '../providers/FinancialContext';
 import { useAuth } from '../providers/AuthContext';
 import { FloatingAiChat } from '../../modules/ai-assistant/FloatingAiChat';
+import {
+  exportFinancialCaseExcel,
+  openExecutiveReportPrintView,
+} from '../../core/reports/executiveReportGenerator';
 
 const NAV_ITEMS = [
   { to: '/dashboard', label: 'Dashboard Principal', icon: LayoutDashboard },
@@ -46,9 +52,16 @@ export const MainLayout: React.FC = () => {
     activePeriod,
     comparisonPeriod,
     activeTotals,
+    comparisonTotals,
+    ratios,
+    duPont,
+    cvuAndLeverage,
+    cashFlowResult,
+    masterBudgetAndProforma,
     inventoryResult,
     setActivePeriodId,
     setComparisonPeriodId,
+    autoBalanceSheet,
     resetDemoData,
     clearForNewCase,
   } = useFinancialSystem();
@@ -71,6 +84,18 @@ export const MainLayout: React.FC = () => {
   useEffect(() => {
     setMobileMenuOpen(false);
   }, [location.pathname]);
+
+  // Bloquea el scroll del fondo cuando el menú móvil está abierto
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [mobileMenuOpen]);
 
   const currentModule =
     NAV_ITEMS.find((item) => location.pathname.startsWith(item.to)) ?? NAV_ITEMS[0];
@@ -138,85 +163,7 @@ export const MainLayout: React.FC = () => {
         </div>
 
         {/* =====================================================================
-            2. MENÚ MÓVIL A PANTALLA COMPLETA TRANSLÚCIDO (Estilo Overlay)
-            Deja ver ligeramente el fondo desenfocado, lista centrada de módulos
-            y botón circular "X" abajo para cerrar, con márgenes reducidos.
-           ===================================================================== */}
-        {mobileMenuOpen && (
-          <div className="fixed inset-0 z-[100000] lg:hidden bg-slate-950/85 dark:bg-black/88 backdrop-blur-md flex flex-col items-center justify-center gap-2 px-4 py-2 text-white animate-fadeIn">
-            {/* Encabezado compacto del overlay con foto y nombre del usuario */}
-            <div className="w-full max-w-xs flex items-center justify-between border-b border-white/15 pb-2">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full overflow-hidden ring-2 ring-emerald-400/70 bg-blue-600 flex items-center justify-center text-xs font-bold">
-                  {user?.avatarUrl ? (
-                    <img
-                      src={user.avatarUrl}
-                      alt={user.displayName}
-                      style={{ objectPosition: user.avatarPosition ?? 'center' }}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    user?.displayName.charAt(0).toUpperCase()
-                  )}
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-white leading-tight">{user?.displayName}</p>
-                  <p className="text-[10px] text-slate-300 leading-tight">
-                    Selecciona un módulo
-                  </p>
-                </div>
-              </div>
-              <CurrentModuleIcon className="w-4 h-4 text-emerald-400" />
-            </div>
-
-            {/* Lista central vertical de todos los módulos con menor margen */}
-            <nav className="w-full max-w-xs py-1 overflow-y-auto max-h-[76vh] flex flex-col items-center gap-1">
-              {NAV_ITEMS.map((item) => {
-                const Icon = item.icon;
-                const showBadge =
-                  item.to === '/inventario' &&
-                  inventoryResult.productsInReorderAlert > 0;
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    onClick={() => setMobileMenuOpen(false)}
-                    className={({ isActive }) =>
-                      `w-full px-3 py-1.5 rounded-xl flex items-center justify-center gap-2 text-center transition-all ${isActive
-                        ? 'text-white font-extrabold text-sm bg-white/15 border border-white/25 shadow-md'
-                        : 'text-slate-300/85 hover:text-white font-medium text-xs hover:bg-white/5'
-                      }`
-                    }
-                  >
-                    <Icon className="w-3.5 h-3.5 shrink-0 opacity-85" />
-                    <span>{item.label}</span>
-                    {showBadge && (
-                      <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-rose-500 text-white">
-                        {inventoryResult.productsInReorderAlert}
-                      </span>
-                    )}
-                  </NavLink>
-                );
-              })}
-            </nav>
-
-            {/* Botón inferior de cierre "X" compacto */}
-            <div className="w-full max-w-xs pt-1.5 border-t border-white/15 flex flex-col items-center gap-0.5">
-              <button
-                type="button"
-                aria-label="Cerrar menú"
-                onClick={() => setMobileMenuOpen(false)}
-                className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 border border-white/25 flex items-center justify-center text-white transition-transform active:scale-90"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              <span className="text-[10px] text-slate-400">Cerrar</span>
-            </div>
-          </div>
-        )}
-
-        {/* =====================================================================
-            3. BARRA LATERAL DE ESCRITORIO (Solo visible en PC: hidden lg:flex)
+            2. BARRA LATERAL DE ESCRITORIO (Solo visible en PC: hidden lg:flex)
            ===================================================================== */}
         <aside className="glass-card sidebar-dock !rounded-3xl hidden lg:flex lg:w-[76px] shrink-0 flex-col items-center gap-2 p-3 overflow-visible">
           <div className="nav-icon flex mb-2 w-11 h-11 rounded-full bg-blue-600 text-white items-center justify-center text-base font-bold shadow-md overflow-hidden ring-2 ring-white/80 dark:ring-emerald-400/50">
@@ -353,6 +300,14 @@ export const MainLayout: React.FC = () => {
                   <>
                     <AlertTriangle className="w-4 h-4" /> Descuadre C${' '}
                     {activeTotals.diferenciaCuadre.toLocaleString()}
+                    <button
+                      type="button"
+                      onClick={() => autoBalanceSheet()}
+                      className="ml-1 px-2 py-0.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold transition-colors"
+                      title="Cuadrar Balance General automáticamente en 1 clic"
+                    >
+                      Auto-Cuadrar
+                    </button>
                   </>
                 )}
               </div>
@@ -365,6 +320,56 @@ export const MainLayout: React.FC = () => {
                 <Sparkles className="w-3.5 h-3.5" />
                 <span>IA Autorelleno</span>
               </NavLink>
+
+              <button
+                type="button"
+                onClick={() =>
+                  openExecutiveReportPrintView({
+                    state,
+                    activePeriod,
+                    comparisonPeriod,
+                    activeTotals,
+                    comparisonTotals,
+                    ratios,
+                    duPont,
+                    cvuAndLeverage,
+                    cashFlowResult,
+                    masterBudgetAndProforma,
+                    inventoryResult,
+                    authorName: user?.displayName,
+                  })
+                }
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-colors"
+                title="Generar e Imprimir Reporte Financiero Ejecutivo en PDF (Módulos A–I)"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Generar Reporte</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  exportFinancialCaseExcel({
+                    state,
+                    activePeriod,
+                    comparisonPeriod,
+                    activeTotals,
+                    comparisonTotals,
+                    ratios,
+                    duPont,
+                    cvuAndLeverage,
+                    cashFlowResult,
+                    masterBudgetAndProforma,
+                    inventoryResult,
+                    authorName: user?.displayName,
+                  })
+                }
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white shadow-sm transition-colors"
+                title="Descargar libro de Excel (.xls) con todas las tablas financieras del caso"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Exportar Excel</span>
+              </button>
 
               <button
                 type="button"
@@ -437,6 +442,104 @@ export const MainLayout: React.FC = () => {
           </main>
         </div>
       </div>
+
+      {/* =====================================================================
+          MENÚ MÓVIL FIJO AL VIEWPORT REAL (Fuera de .glass-frame para evitar
+          que backdrop-filter desplace el menú hacia abajo o deje espacios vacíos)
+         ===================================================================== */}
+      {mobileMenuOpen && (
+        <div
+          className="fixed inset-0 h-[100dvh] w-screen z-[100000] lg:hidden bg-slate-950/80 dark:bg-black/85 backdrop-blur-md flex items-start sm:items-center justify-center p-2.5 sm:p-4 overflow-hidden"
+          onClick={() => setMobileMenuOpen(false)}
+        >
+          <div
+            className="w-full max-w-sm max-h-[calc(100dvh-1.25rem)] bg-slate-900/95 dark:bg-emerald-950/95 border border-white/15 dark:border-emerald-500/30 rounded-2xl shadow-2xl flex flex-col overflow-hidden text-white"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Encabezado fijo arriba */}
+            <div className="px-3.5 py-2.5 flex items-center justify-between border-b border-white/15 shrink-0">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-full overflow-hidden ring-2 ring-emerald-400/70 bg-blue-600 flex items-center justify-center text-xs font-bold shrink-0">
+                  {user?.avatarUrl ? (
+                    <img
+                      src={user.avatarUrl}
+                      alt={user.displayName}
+                      style={{ objectPosition: user.avatarPosition ?? 'center' }}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    user?.displayName.charAt(0).toUpperCase()
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-white truncate leading-tight">
+                    {user?.displayName}
+                  </p>
+                  <p className="text-[10px] text-emerald-300/90 leading-tight">
+                    Navegación de Módulos (A–J)
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Cerrar menú"
+                onClick={() => setMobileMenuOpen(false)}
+                className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 flex items-center justify-center text-white shrink-0"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Lista compacta de módulos sin espacios vacíos */}
+            <nav className="p-2 overflow-y-auto flex-1 grid grid-cols-1 gap-1">
+              {NAV_ITEMS.map((item) => {
+                const Icon = item.icon;
+                const showBadge =
+                  item.to === '/inventario' &&
+                  inventoryResult.productsInReorderAlert > 0;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={({ isActive }) =>
+                      `w-full px-3 py-2 rounded-xl flex items-center gap-2.5 text-left transition-all ${
+                        isActive
+                          ? 'text-white font-bold text-xs bg-emerald-600/35 dark:bg-emerald-500/25 border border-emerald-400/50 shadow-sm'
+                          : 'text-slate-200 hover:text-white font-medium text-xs hover:bg-white/10'
+                      }`
+                    }
+                  >
+                    <Icon className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span className="truncate flex-1">{item.label}</span>
+                    {showBadge && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-rose-500 text-white shrink-0">
+                        {inventoryResult.productsInReorderAlert}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </nav>
+
+            {/* Pie compacto */}
+            <div className="px-3.5 py-2 border-t border-white/15 flex items-center justify-between shrink-0 bg-black/20">
+              <span className="text-[10px] text-slate-300 truncate flex items-center gap-1.5">
+                <CurrentModuleIcon className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                {currentModule.label}
+              </span>
+              <button
+                type="button"
+                onClick={() => setMobileMenuOpen(false)}
+                className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-[11px] font-semibold text-white"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <FloatingAiChat />
     </div>
   );

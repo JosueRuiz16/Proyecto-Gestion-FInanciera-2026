@@ -7,11 +7,26 @@ import {
   FilePlus2,
   Trash2,
   Calculator,
+  Printer,
+  Download,
+  RefreshCw,
+  Scale,
+  Zap,
+  EyeOff,
 } from 'lucide-react';
 import { useFinancialSystem } from '../../app/providers/FinancialContext';
-import { AccountCategory, AccountSubType } from '../../data/types/financial';
+import { useAuth } from '../../app/providers/AuthContext';
+import {
+  AccountCategory,
+  AccountSubType,
+  FinancialAccountItem,
+} from '../../data/types/financial';
 import { AcademicDefenseCard } from '../../components/common/AcademicDefenseCard';
 import { formatCurrency } from '../../components/common/formatters';
+import {
+  exportFinancialCaseExcel,
+  openExecutiveReportPrintView,
+} from '../../core/reports/executiveReportGenerator';
 
 export const FinancialStatementsPage: React.FC = () => {
   const {
@@ -20,15 +35,224 @@ export const FinancialStatementsPage: React.FC = () => {
     activePeriod,
     comparisonTotals,
     activeTotals,
+    ratios,
+    duPont,
+    cvuAndLeverage,
+    cashFlowResult,
+    masterBudgetAndProforma,
+    inventoryResult,
     updatePeriod,
     updateAccountBalance,
     updateAccountMeta,
     addAccount,
     removeAccount,
     updateCompanyInfo,
+    syncInventoryWithBalanceSheet,
+    autoSyncCascade,
+    setAutoSyncCascade,
+    autoBalanceSheet,
+    syncAllModulesFromStatements,
+    applyExtractedFinancialData,
     resetDemoData,
     clearForNewCase,
   } = useFinancialSystem();
+  const { user } = useAuth();
+  const [syncNotice, setSyncNotice] = useState<string>('');
+  const [showQuickSolver, setShowQuickSolver] = useState<boolean>(false);
+  const [quickSingleYear, setQuickSingleYear] = useState<boolean>(true);
+  const [quickCompanyName, setQuickCompanyName] = useState<string>('Ejercicio de Defensa en Clase, S. A.');
+  const [quickTaxRate, setQuickTaxRate] = useState<number>(30);
+  const [quickUnitPrice, setQuickUnitPrice] = useState<number>(250);
+  const [quickUnitVarCost, setQuickUnitVarCost] = useState<number>(150);
+  const [quickRows, setQuickRows] = useState<
+    Array<{
+      code: string;
+      name: string;
+      category: AccountCategory;
+      subType: AccountSubType;
+      base: number;
+      active: number;
+    }>
+  >([
+    { code: '1101', name: 'Efectivo en Caja y Bancos', category: 'ACTIVO_CORRIENTE', subType: 'EFECTIVO', base: 80000, active: 100000 },
+    { code: '1102', name: 'Cuentas por Cobrar Clientes', category: 'ACTIVO_CORRIENTE', subType: 'CUENTAS_POR_COBRAR', base: 120000, active: 150000 },
+    { code: '1103', name: 'Inventarios', category: 'ACTIVO_CORRIENTE', subType: 'INVENTARIO', base: 160000, active: 200000 },
+    { code: '1201', name: 'Propiedad, Planta y Equipo Neto', category: 'ACTIVO_NO_CORRIENTE', subType: 'ACTIVO_FIJO_NETO', base: 440000, active: 550000 },
+    { code: '2101', name: 'Cuentas por Pagar Proveedores', category: 'PASIVO_CORRIENTE', subType: 'CUENTAS_POR_PAGAR', base: 100000, active: 120000 },
+    { code: '2102', name: 'Préstamos Bancarios Corto Plazo', category: 'PASIVO_CORRIENTE', subType: 'DEUDA_CORTO_PLAZO', base: 80000, active: 100000 },
+    { code: '2201', name: 'Deuda a Largo Plazo', category: 'PASIVO_NO_CORRIENTE', subType: 'DEUDA_LARGO_PLAZO', base: 220000, active: 280000 },
+    { code: '3101', name: 'Capital Social', category: 'PATRIMONIO', subType: 'CAPITAL_SOCIAL', base: 250000, active: 300000 },
+    { code: '3102', name: 'Utilidades Retenidas', category: 'PATRIMONIO', subType: 'UTILIDADES_RETENIDAS', base: 150000, active: 200000 },
+    { code: '4101', name: 'Ventas Netas', category: 'INGRESO_OPERATIVO', subType: 'VENTAS_NETAS', base: 950000, active: 1200000 },
+    { code: '5101', name: 'Costo de Ventas (CBV)', category: 'COSTO_VENTAS', subType: 'COSTO_BIENES_VENDIDOS', base: 570000, active: 720000 },
+    { code: '6101', name: 'Gastos de Administración y Ventas', category: 'GASTO_OPERATIVO', subType: 'GASTOS_VENTA_ADMIN', base: 160000, active: 200000 },
+    { code: '6102', name: 'Gastos de Depreciación', category: 'GASTO_OPERATIVO', subType: 'GASTOS_DEPRECIACION', base: 40000, active: 50000 },
+    { code: '7101', name: 'Gastos Financieros (Intereses)', category: 'GASTO_FINANCIERO', subType: 'INTERESES_PAGADOS', base: 30000, active: 40000 },
+  ]);
+
+  const handleAutoBalanceSheet = () => {
+    const targetName = autoBalanceSheet();
+    setSyncNotice(`Balance cuadrado automáticamente en "${targetName}" y módulos sincronizados.`);
+    setTimeout(() => setSyncNotice(''), 3500);
+  };
+
+  const handleSyncAllModules = () => {
+    syncAllModulesFromStatements();
+    syncInventoryWithBalanceSheet();
+    setSyncNotice('Todos los módulos (C-V-U, Apalancamiento, Flujo, Proforma e Inventario) fueron sincronizados.');
+    setTimeout(() => setSyncNotice(''), 3500);
+  };
+
+  const handleQuickZeroAll = () => {
+    setQuickRows((prev) => prev.map((r) => ({ ...r, base: 0, active: 0 })));
+  };
+
+  const handleQuickBalanceEquity = () => {
+    setQuickRows((prev) => {
+      const sumActBase = prev
+        .filter((r) => r.category === 'ACTIVO_CORRIENTE' || r.category === 'ACTIVO_NO_CORRIENTE')
+        .reduce((s, r) => s + r.base, 0);
+      const sumPasCapBase = prev
+        .filter(
+          (r) =>
+            r.category === 'PASIVO_CORRIENTE' ||
+            r.category === 'PASIVO_NO_CORRIENTE' ||
+            (r.category === 'PATRIMONIO' && r.subType !== 'UTILIDADES_RETENIDAS')
+        )
+        .reduce((s, r) => s + r.base, 0);
+
+      const sumActActive = prev
+        .filter((r) => r.category === 'ACTIVO_CORRIENTE' || r.category === 'ACTIVO_NO_CORRIENTE')
+        .reduce((s, r) => s + r.active, 0);
+      const sumPasCapActive = prev
+        .filter(
+          (r) =>
+            r.category === 'PASIVO_CORRIENTE' ||
+            r.category === 'PASIVO_NO_CORRIENTE' ||
+            (r.category === 'PATRIMONIO' && r.subType !== 'UTILIDADES_RETENIDAS')
+        )
+        .reduce((s, r) => s + r.active, 0);
+
+      return prev.map((r) =>
+        r.subType === 'UTILIDADES_RETENIDAS'
+          ? {
+              ...r,
+              base: sumActBase - sumPasCapBase,
+              active: sumActActive - sumPasCapActive,
+            }
+          : r
+      );
+    });
+  };
+
+  const handleApplyQuickExercise = () => {
+    const baseId = comparisonPeriod.id;
+    const actId = activePeriod.id;
+
+    // Auto-cuadra Utilidades Retenidas si hay diferencia
+    const sumActActive = quickRows
+      .filter((r) => r.category === 'ACTIVO_CORRIENTE' || r.category === 'ACTIVO_NO_CORRIENTE')
+      .reduce((s, r) => s + r.active, 0);
+    const sumPasCapActive = quickRows
+      .filter(
+        (r) =>
+          r.category === 'PASIVO_CORRIENTE' ||
+          r.category === 'PASIVO_NO_CORRIENTE' ||
+          (r.category === 'PATRIMONIO' && r.subType !== 'UTILIDADES_RETENIDAS')
+      )
+      .reduce((s, r) => s + r.active, 0);
+    const neededRetainedActive = sumActActive - sumPasCapActive;
+
+    const sumActBase = quickRows
+      .filter((r) => r.category === 'ACTIVO_CORRIENTE' || r.category === 'ACTIVO_NO_CORRIENTE')
+      .reduce((s, r) => s + (quickSingleYear ? Math.round(r.active * 0.9) : r.base), 0);
+    const sumPasCapBase = quickRows
+      .filter(
+        (r) =>
+          r.category === 'PASIVO_CORRIENTE' ||
+          r.category === 'PASIVO_NO_CORRIENTE' ||
+          (r.category === 'PATRIMONIO' && r.subType !== 'UTILIDADES_RETENIDAS')
+      )
+      .reduce((s, r) => s + (quickSingleYear ? Math.round(r.active * 0.9) : r.base), 0);
+    const neededRetainedBase = sumActBase - sumPasCapBase;
+
+    const accounts: FinancialAccountItem[] = quickRows.map((r, idx) => {
+      const actVal =
+        r.subType === 'UTILIDADES_RETENIDAS' ? neededRetainedActive : r.active;
+      const baseVal =
+        r.subType === 'UTILIDADES_RETENIDAS'
+          ? neededRetainedBase
+          : quickSingleYear
+          ? Math.round(r.active * 0.9)
+          : r.base;
+      return {
+        id: `acc-q-${idx + 1}`,
+        code: r.code,
+        name: r.name,
+        category: r.category,
+        subType: r.subType,
+        balances: {
+          [baseId]: baseVal,
+          [actId]: actVal,
+        },
+      };
+    });
+
+    const sales = quickRows.find((r) => r.subType === 'VENTAS_NETAS')?.active || 100000;
+    const gOp = quickRows
+      .filter((r) => r.category === 'GASTO_OPERATIVO')
+      .reduce((s, r) => s + r.active, 0);
+    const fin = quickRows.find((r) => r.subType === 'INTERESES_PAGADOS')?.active || 0;
+    const pUnit = quickUnitPrice > 0 ? quickUnitPrice : 250;
+    const cvUnit = quickUnitVarCost >= 0 ? quickUnitVarCost : 150;
+    const unitsSold = Math.max(1, Math.round(sales / pUnit));
+
+    applyExtractedFinancialData({
+      company: {
+        ...state.company,
+        name: quickCompanyName.trim() || 'Ejercicio Financiero en Clase, S. A.',
+      },
+      periods: [
+        { ...comparisonPeriod, taxRate: quickTaxRate, taxAmount: null },
+        { ...activePeriod, taxRate: quickTaxRate, taxAmount: null },
+      ],
+      accounts,
+      cvuInput: {
+        unitPrice: pUnit,
+        unitVariableCost: cvUnit,
+        fixedOperatingCosts: gOp,
+        currentUnitsSold: unitsSold,
+        interestExpense: fin,
+        preferredDividends: 0,
+        taxRate: quickTaxRate,
+        priceChangePct: 10,
+        variableCostChangePct: -5,
+        fixedCostChangePct: 0,
+        volumeChangePct: 15,
+      },
+    });
+    setTimeout(() => {
+      syncAllModulesFromStatements();
+    }, 50);
+    setShowQuickSolver(false);
+    setSyncNotice('¡Ejercicio resuelto! Se cuadraron los Estados Financieros y se actualizaron los 9 módulos.');
+    setTimeout(() => setSyncNotice(''), 4500);
+  };
+
+  const reportPayload = {
+    state,
+    activePeriod,
+    comparisonPeriod,
+    activeTotals,
+    comparisonTotals,
+    ratios,
+    duPont,
+    cvuAndLeverage,
+    cashFlowResult,
+    masterBudgetAndProforma,
+    inventoryResult,
+    authorName: user?.displayName,
+  };
 
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
@@ -159,6 +383,73 @@ export const FinancialStatementsPage: React.FC = () => {
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
+            onClick={() => setShowQuickSolver((v) => !v)}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition-colors border ${
+              showQuickSolver
+                ? 'bg-amber-500 text-white border-amber-500'
+                : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100'
+            }`}
+            title="Abrir u ocultar la plantilla rápida para capturar y resolver cualquier ejercicio dictado por el profesor en 30 segundos"
+          >
+            {showQuickSolver ? <EyeOff className="w-3.5 h-3.5" /> : <Zap className="w-3.5 h-3.5" />}
+            <span>{showQuickSolver ? 'Ocultar Ejercicio Rápido' : '⚡ Resolver Ejercicio Rápido'}</span>
+          </button>
+
+          {(!activeTotals.estaCuadrado || !comparisonTotals.estaCuadrado) && (
+            <button
+              type="button"
+              onClick={handleAutoBalanceSheet}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-sm transition-colors"
+              title="Ajusta automáticamente Utilidades Retenidas / Capital para cuadrar Activo = Pasivo + Patrimonio"
+            >
+              <Scale className="w-3.5 h-3.5" />
+              <span>Auto-Cuadrar Balance</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={handleSyncAllModules}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-sm transition-colors"
+            title="Sincroniza Punto de Equilibrio, Apalancamiento, Flujo de Efectivo, Presupuesto Maestro e Inventario con estos Estados Financieros"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Sincronizar Módulos C–I</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setAutoSyncCascade(!autoSyncCascade)}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors ${
+              autoSyncCascade
+                ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                : 'bg-slate-100 text-slate-600 border-slate-300'
+            }`}
+            title="Cuando está activo, cada cambio en cuentas actualiza en tiempo real Punto de Equilibrio, Apalancamiento, Flujo y Proforma"
+          >
+            <span>Cascada Auto: {autoSyncCascade ? 'ON' : 'OFF'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openExecutiveReportPrintView(reportPayload)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-sm transition-colors"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Generar Reporte (PDF)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => exportFinancialCaseExcel(reportPayload)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow-sm transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Exportar Excel</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => {
               if (
                 window.confirm(
@@ -192,6 +483,155 @@ export const FinancialStatementsPage: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {syncNotice && (
+        <div className="px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center gap-2">
+          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+          <span>{syncNotice}</span>
+        </div>
+      )}
+
+      {/* Panel Ocultable: Modo Ejercicio Rápido del Profesor (Captura en 30 segundos) */}
+      {showQuickSolver && (
+        <div className="bg-amber-50/70 border-2 border-amber-300 rounded-xl p-5 shadow-sm space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-amber-200 pb-3">
+            <div>
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-amber-800 block">
+                ⚡ Modo Ejercicio en Vivo (Ocultable)
+              </span>
+              <h2 className="text-sm font-bold text-slate-900">
+                Captura Rápida de Ejercicio del Profesor (14 Cuentas Esenciales + C-V-U)
+              </h2>
+              <p className="text-xs text-slate-600">
+                Ingresa solo los datos que dicte el profesor. El sistema calcula automáticamente Utilidades Retenidas para cuadrar el Balance y resuelve los 9 módulos.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleQuickZeroAll}
+                className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-bold"
+              >
+                🧹 Poner Todo en Cero
+              </button>
+              <button
+                type="button"
+                onClick={handleQuickBalanceEquity}
+                className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold"
+              >
+                ⚖️ Cuadrar Utilidades Retenidas
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowQuickSolver(false)}
+                className="px-3 py-1.5 rounded-lg bg-white text-slate-600 border border-slate-300 text-xs font-semibold"
+              >
+                Ocultar
+              </button>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 text-xs bg-white p-3.5 rounded-xl border border-amber-200">
+            <div className="sm:col-span-2">
+              <label className="block font-bold text-slate-700 mb-1">Nombre del Ejercicio / Empresa</label>
+              <input
+                type="text"
+                value={quickCompanyName}
+                onChange={(e) => setQuickCompanyName(e.target.value)}
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Modalidad de Datos</label>
+              <select
+                value={quickSingleYear ? '1' : '2'}
+                onChange={(e) => setQuickSingleYear(e.target.value === '1')}
+                className="w-full border border-amber-400 bg-amber-50 rounded-lg px-2.5 py-1.5 font-bold text-amber-900"
+              >
+                <option value="1">1 solo año dictado</option>
+                <option value="2">2 años comparativos</option>
+              </select>
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Tasa IR (%)</label>
+              <input
+                type="number"
+                value={quickTaxRate}
+                onChange={(e) => setQuickTaxRate(Number(e.target.value))}
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Precio Venta Unit. (P)</label>
+              <input
+                type="number"
+                value={quickUnitPrice}
+                onChange={(e) => setQuickUnitPrice(Number(e.target.value))}
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
+              />
+            </div>
+            <div>
+              <label className="block font-bold text-slate-700 mb-1">Costo Var. Unit. (CVu)</label>
+              <input
+                type="number"
+                value={quickUnitVarCost}
+                onChange={(e) => setQuickUnitVarCost(Number(e.target.value))}
+                className="w-full border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 text-xs">
+            {quickRows.map((row, idx) => (
+              <div
+                key={row.code}
+                className="bg-white p-2.5 rounded-lg border border-slate-200 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] font-mono text-slate-400 block">{row.code} · {row.category}</span>
+                  <span className="font-bold text-slate-800 truncate block">{row.name}</span>
+                </div>
+                {!quickSingleYear && (
+                  <input
+                    type="number"
+                    value={row.base}
+                    onChange={(e) => {
+                      const val = Number(e.target.value) || 0;
+                      setQuickRows((prev) =>
+                        prev.map((item, i) => (i === idx ? { ...item, base: val } : item))
+                      );
+                    }}
+                    placeholder={comparisonPeriod.name}
+                    className="w-24 text-right border border-slate-300 rounded px-2 py-1 font-mono text-xs"
+                  />
+                )}
+                <input
+                  type="number"
+                  value={row.active}
+                  onChange={(e) => {
+                    const val = Number(e.target.value) || 0;
+                    setQuickRows((prev) =>
+                      prev.map((item, i) => (i === idx ? { ...item, active: val } : item))
+                    );
+                  }}
+                  placeholder={activePeriod.name}
+                  className="w-28 text-right border border-blue-300 bg-blue-50/40 rounded px-2 py-1 font-mono font-bold text-blue-900 text-xs"
+                />
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <button
+              type="button"
+              onClick={handleApplyQuickExercise}
+              className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold shadow-md transition-colors"
+            >
+              🚀 Resolver Ejercicio, Cuadrar Balance y Actualizar los 9 Módulos
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Panel Editable de Datos Generales de la Empresa, Períodos y Mercado */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
@@ -362,10 +802,19 @@ export const FinancialStatementsPage: React.FC = () => {
                 <CheckCircle2 className="w-3.5 h-3.5" /> Cuadrado
               </span>
             ) : (
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-400/30">
-                <AlertTriangle className="w-3.5 h-3.5" /> Descuadre:{' '}
-                {formatCurrency(activeTotals.diferenciaCuadre)}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-400/30">
+                  <AlertTriangle className="w-3.5 h-3.5" /> Descuadre:{' '}
+                  {formatCurrency(activeTotals.diferenciaCuadre)}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleAutoBalanceSheet}
+                  className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-white text-[11px] font-bold shadow-sm transition-colors"
+                >
+                  ⚖️ Auto-Cuadrar
+                </button>
+              </div>
             )}
           </div>
 

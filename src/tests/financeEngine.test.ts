@@ -150,4 +150,50 @@ describe('Motor Financiero GFO IS2122 - Verificación con Estados Auditados Corp
     expect(extracted.patch.cashFlowEntries?.length).toBeGreaterThan(0);
     expect(extracted.patch.inventoryProducts?.length).toBeGreaterThan(0);
   });
+
+  it('7. Verifica lectura multilínea de PDF, montos pequeños y auto-cuadre contable (El Ahorro 2021-2022)', async () => {
+    const multilinePdfText = `Comercial El Ahorro
+    2021 2022
+    Efectivo en caja y bancos
+    185
+    242
+    Cuentas por cobrar clientes
+    310
+    368
+    Inventarios de mercaderías
+    495
+    580
+    Propiedad planta y equipo
+    865
+    955
+    Cuentas por pagar proveedores
+    340
+    395
+    Préstamos bancarios largo plazo
+    450
+    510
+    Capital social
+    550
+    550`;
+
+    const res = await extractFinancialDataFromDocument(null, multilinePdfText);
+    expect(res.success).toBe(true);
+    expect(res.preview?.isBalancedActive).toBe(true);
+    expect(res.patch.accounts?.length).toBeGreaterThanOrEqual(8);
+  });
+
+  it('8. Rechaza cadenas binarias/mojibake de flujos PDF y carga cuentas limpias', async () => {
+    const corruptedPdfBinaryNoise = `BalanceGeneralElAhorro20212022
+    Rõ¾»üýïÞo çŸ‡d#ç! ÇH 9
+    ¼"_Of ÅßMü¤R@Ý¦iÅ 4
+    ËÊ®‰žœpYÖû† ñßé÷ 2
+    L·@ó@R²÷c ·‰â«<ÙéÉ_ÅN 8`;
+
+    const res = await extractFinancialDataFromDocument(null, corruptedPdfBinaryNoise);
+    expect(res.success).toBe(true);
+    expect(res.patch.company?.name).toContain('El Ahorro');
+    for (const acc of res.patch.accounts || []) {
+      expect(acc.name).not.toMatch(/[õ¾»ýÞŸ‡‰žœ÷²«Ù]/);
+    }
+  });
 });

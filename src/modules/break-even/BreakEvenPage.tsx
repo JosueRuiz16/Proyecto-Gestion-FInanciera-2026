@@ -1,5 +1,5 @@
-import React from 'react';
-import { RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Calculator, EyeOff, RefreshCw } from 'lucide-react';
 import {
   CartesianGrid,
   Legend,
@@ -24,6 +24,7 @@ export const BreakEvenPage: React.FC = () => {
   } = useFinancialSystem();
 
   const cvu = state.cvuInput;
+  const [showSubstitution, setShowSubstitution] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -41,15 +42,80 @@ export const BreakEvenPage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={syncCvuWithIncomeStatement}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-colors"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Sincronizar con Estado de Resultados ({activePeriod.name})</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowSubstitution((v) => !v)}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition-colors border ${
+              showSubstitution
+                ? 'bg-indigo-600 text-white border-indigo-600'
+                : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50'
+            }`}
+          >
+            {showSubstitution ? <EyeOff className="w-3.5 h-3.5" /> : <Calculator className="w-3.5 h-3.5" />}
+            <span>{showSubstitution ? 'Ocultar Sustitución Paso a Paso' : 'Ver Sustitución Paso a Paso'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={syncCvuWithIncomeStatement}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Sincronizar con Estado de Resultados ({activePeriod.name})</span>
+          </button>
+        </div>
       </div>
+
+      {showSubstitution && (
+        <div className="bg-indigo-50/80 border border-indigo-200 rounded-xl p-4 space-y-2 text-xs">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-indigo-950">
+              Sustitución Numérica en Vivo del Modelo C-V-U ({activePeriod.name})
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowSubstitution(false)}
+              className="text-[11px] font-semibold text-indigo-700 hover:underline"
+            >
+              Ocultar panel
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 font-mono text-[11px] text-slate-800">
+            <div className="bg-white p-2.5 rounded-lg border border-indigo-100">
+              <strong>1. Margen Contribución Unitario (MCu = P - CVu):</strong>
+              <br />
+              {formatCurrency(cvu.unitPrice)} - {formatCurrency(cvu.unitVariableCost)} ={' '}
+              <strong className="text-blue-700">{formatCurrency(cvuAndLeverage.unitContributionMargin)} / unid.</strong>
+            </div>
+            <div className="bg-white p-2.5 rounded-lg border border-indigo-100">
+              <strong>2. Razón de Margen de Contribución (%MC = MCu ÷ P):</strong>
+              <br />({formatCurrency(cvuAndLeverage.unitContributionMargin)} ÷ {formatCurrency(cvu.unitPrice)}) × 100 ={' '}
+              <strong className="text-blue-700">{formatPct(cvuAndLeverage.contributionMarginRatioPct)}</strong>
+            </div>
+            <div className="bg-white p-2.5 rounded-lg border border-indigo-100">
+              <strong>3. Punto de Equilibrio Físico (PEq = CF ÷ MCu):</strong>
+              <br />
+              {formatCurrency(cvu.fixedOperatingCosts)} ÷ {formatCurrency(cvuAndLeverage.unitContributionMargin)} ={' '}
+              <strong className="text-emerald-700">
+                {cvuAndLeverage.breakEvenUnits !== null
+                  ? `${formatNumber(cvuAndLeverage.breakEvenUnits, 2)} unidades`
+                  : 'N/D'}
+              </strong>
+            </div>
+            <div className="bg-white p-2.5 rounded-lg border border-indigo-100">
+              <strong>4. Punto de Equilibrio Monetario (PE C$ = CF ÷ %MC):</strong>
+              <br />
+              {formatCurrency(cvu.fixedOperatingCosts)} ÷ {(cvuAndLeverage.contributionMarginRatioPct / 100).toFixed(4)} ={' '}
+              <strong className="text-emerald-700">
+                {cvuAndLeverage.breakEvenRevenue !== null
+                  ? formatCurrency(cvuAndLeverage.breakEvenRevenue)
+                  : 'N/D'}
+              </strong>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AcademicDefenseCard
         moduleTitle="Punto de Equilibrio y Modelo Costo-Volumen-Utilidad (C-V-U)"

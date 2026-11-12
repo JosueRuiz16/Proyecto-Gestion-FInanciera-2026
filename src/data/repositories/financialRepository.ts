@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 import { INITIAL_DEMO_STATE, createBlankCaseState } from '../seed/demoData';
-import { createPersonalBudgetsByUser } from '../seed/personalBudgets';
+import {
+  PERSONAL_BUDGET_OVERRIDES,
+  createPersonalBudgetsByUser,
+} from '../seed/personalBudgets';
 import { FinancialSystemState } from '../types/financial';
 
 // v3: Caso Oficial del PDF "Corporación Agrícola, S. A. y subsidiarias (2023-2024)"
@@ -25,6 +28,16 @@ export class FinancialRepository {
       const parsed = JSON.parse(raw) as FinancialSystemState;
       if (!parsed.personalBudgetsByUser) {
         parsed.personalBudgetsByUser = createPersonalBudgetsByUser(parsed.personalBudget);
+      } else {
+        for (const [uid, override] of Object.entries(PERSONAL_BUDGET_OVERRIDES)) {
+          if (
+            override &&
+            (!parsed.personalBudgetsByUser[uid]?.studentControl ||
+              parsed.personalBudgetsByUser[uid]?.monthLabel?.includes('ficticios'))
+          ) {
+            parsed.personalBudgetsByUser[uid] = structuredClone(override);
+          }
+        }
       }
       return parsed;
     } catch {

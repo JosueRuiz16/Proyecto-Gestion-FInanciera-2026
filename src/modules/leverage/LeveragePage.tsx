@@ -1,5 +1,5 @@
-import React from 'react';
-import { RefreshCw } from 'lucide-react';
+import React, { useState } from 'react';
+import { Calculator, EyeOff, RefreshCw } from 'lucide-react';
 import { useFinancialSystem } from '../../app/providers/FinancialContext';
 import { AcademicDefenseCard } from '../../components/common/AcademicDefenseCard';
 import { formatCurrency } from '../../components/common/formatters';
@@ -14,6 +14,7 @@ export const LeveragePage: React.FC = () => {
   } = useFinancialSystem();
 
   const cvu = state.cvuInput;
+  const [showSubstitution, setShowSubstitution] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -31,15 +32,75 @@ export const LeveragePage: React.FC = () => {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={syncCvuWithIncomeStatement}
-          className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-colors"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Cargar datos del Estado de Resultados ({activePeriod.name})</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowSubstitution((v) => !v)}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold shadow-sm transition-colors border ${
+              showSubstitution
+                ? 'bg-indigo-600 text-white border-indigo-600'
+                : 'bg-white text-indigo-700 border-indigo-200 hover:bg-indigo-50'
+            }`}
+          >
+            {showSubstitution ? <EyeOff className="w-3.5 h-3.5" /> : <Calculator className="w-3.5 h-3.5" />}
+            <span>{showSubstitution ? 'Ocultar Sustitución Paso a Paso' : 'Ver Sustitución Paso a Paso'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={syncCvuWithIncomeStatement}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-sm transition-colors"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Cargar datos del Estado de Resultados ({activePeriod.name})</span>
+          </button>
+        </div>
       </div>
+
+      {showSubstitution && (
+        <div className="bg-indigo-50/80 border border-indigo-200 rounded-xl p-4 space-y-2 text-xs">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-indigo-950">
+              Sustitución Numérica en Vivo de GAO, GAF y GAT ({activePeriod.name})
+            </h3>
+            <button
+              type="button"
+              onClick={() => setShowSubstitution(false)}
+              className="text-[11px] font-semibold text-indigo-700 hover:underline"
+            >
+              Ocultar panel
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 font-mono text-[11px] text-slate-800">
+            <div className="bg-white p-2.5 rounded-lg border border-indigo-100">
+              <strong>1. GAO = MC Total ÷ UAII:</strong>
+              <br />
+              {formatCurrency(cvuAndLeverage.currentTotalContributionMargin)} ÷{' '}
+              {formatCurrency(cvuAndLeverage.currentUaii)} ={' '}
+              <strong className="text-blue-700">
+                {cvuAndLeverage.gao !== null ? `${cvuAndLeverage.gao.toFixed(2)} veces` : 'N/D'}
+              </strong>
+            </div>
+            <div className="bg-white p-2.5 rounded-lg border border-indigo-100">
+              <strong>2. GAF = UAII ÷ (UAII - Intereses):</strong>
+              <br />
+              {formatCurrency(cvuAndLeverage.currentUaii)} ÷ (
+              {formatCurrency(cvuAndLeverage.currentUaii)} - {formatCurrency(cvu.interestExpense)}) ={' '}
+              <strong className="text-indigo-700">
+                {cvuAndLeverage.gaf !== null ? `${cvuAndLeverage.gaf.toFixed(2)} veces` : 'N/D'}
+              </strong>
+            </div>
+            <div className="bg-white p-2.5 rounded-lg border border-indigo-100">
+              <strong>3. GAT = GAO × GAF:</strong>
+              <br />
+              {(cvuAndLeverage.gao ?? 0).toFixed(2)} × {(cvuAndLeverage.gaf ?? 0).toFixed(2)} ={' '}
+              <strong className="text-emerald-700">
+                {cvuAndLeverage.gat !== null ? `${cvuAndLeverage.gat.toFixed(2)} veces` : 'N/D'}
+              </strong>
+            </div>
+          </div>
+        </div>
+      )}
 
       <AcademicDefenseCard
         moduleTitle="Grados de Apalancamiento (GAO, GAF y GAT)"

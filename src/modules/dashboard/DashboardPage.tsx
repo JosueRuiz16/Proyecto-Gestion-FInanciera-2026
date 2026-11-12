@@ -7,10 +7,13 @@ import {
   Boxes,
   Calculator,
   CheckCircle2,
+  Download,
   FileSpreadsheet,
   FolderKanban,
   Gauge,
+  Printer,
   Scale,
+  Sparkles,
   Wallet,
 } from 'lucide-react';
 import {
@@ -28,7 +31,12 @@ import {
   YAxis,
 } from 'recharts';
 import { useFinancialSystem } from '../../app/providers/FinancialContext';
+import { useAuth } from '../../app/providers/AuthContext';
 import { formatCurrency, formatPct } from '../../components/common/formatters';
+import {
+  exportFinancialCaseExcel,
+  openExecutiveReportPrintView,
+} from '../../core/reports/executiveReportGenerator';
 
 const PURPLE = '#6d4aff';
 const GREEN = '#22c55e';
@@ -110,6 +118,22 @@ export const DashboardPage: React.FC = () => {
     personalBudgetResult: pb,
     inventoryResult,
   } = useFinancialSystem();
+  const { user } = useAuth();
+
+  const reportPayload = {
+    state,
+    activePeriod,
+    comparisonPeriod,
+    activeTotals,
+    comparisonTotals,
+    ratios,
+    duPont,
+    cvuAndLeverage,
+    cashFlowResult,
+    masterBudgetAndProforma: pf,
+    inventoryResult,
+    authorName: user?.displayName,
+  };
 
   const ratio = (id: string) => ratios.find((r) => r.id === id)?.value ?? null;
 
@@ -135,10 +159,41 @@ export const DashboardPage: React.FC = () => {
     { to: '/finanzas/proforma', title: 'Estados Proforma', icon: FolderKanban, kpi: formatCurrency(pf.proformaNetIncome), sub: 'Utilidad proforma' },
     { to: '/personal/presupuesto', title: 'Presupuesto Personal', icon: Wallet, kpi: formatPct(pb.savingsCapacityPct), sub: 'Capacidad de ahorro' },
     { to: '/inventario', title: 'Control de Inventario', icon: Boxes, kpi: formatCurrency(inventoryResult.totalInventoryValue), sub: 'Valor inventario' },
+    { to: '/ia-asistente', title: 'Asistente IA Pro', icon: Sparkles, kpi: 'Autorelleno', sub: 'Lectura Docs y Chat' },
   ];
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+      {/* Barra rápida de Reporte Ejecutivo y Exportación Excel */}
+      <section className="glass-card px-5 py-3.5 lg:col-span-12 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-bold text-slate-900">
+            Centro de Control Ejecutivo — {state.company.name}
+          </h2>
+          <p className="text-[11px] text-slate-500">
+            Genera el dictamen financiero integral para imprimir/guardar en PDF o descarga todas las tablas en Excel.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => openExecutiveReportPrintView(reportPayload)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm transition-colors"
+          >
+            <Printer className="w-4 h-4" />
+            <span>Generar Reporte Ejecutivo (PDF)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => exportFinancialCaseExcel(reportPayload)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-teal-700 hover:bg-teal-800 text-white shadow-sm transition-colors"
+          >
+            <Download className="w-4 h-4" />
+            <span>Exportar Todo a Excel (.xls)</span>
+          </button>
+        </div>
+      </section>
+
       {/* Tendencia */}
       <section className="glass-card p-5 lg:col-span-6">
         <CardTitle
